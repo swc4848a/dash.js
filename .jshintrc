@@ -12,7 +12,6 @@
     "browser": true,
     "loopfunc" : true,
     "predef" : [
-        "Caster",
         "dijon",
         "Q",
         "ObjectIron",
@@ -26,5 +25,6 @@
         "MediaSource",
         "WebKitMediaKeys",
         "MSMediaKeys",
-        "MediaKeys"] 
+        "MediaKeys",
+        "Caster"]
 }
