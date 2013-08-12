@@ -295,12 +295,11 @@ MediaPlayer.dependencies.Stream = function () {
                 textTrackReady = false,
                 minBufferTime,
                 self = this,
-                manifest = self.manifestModel.getValue(),
-                isLive = self.manifestExt.getIsLive(manifest);
+                manifest = self.manifestModel.getValue();
 
             // Figure out some bits about the stream before building anything.
             self.debug.log("Gathering information for buffers. (1)");
-            self.manifestExt.getDuration(manifest, isLive).then(
+            self.manifestExt.getDuration(manifest).then(
                 function (/*duration*/) {
 
                     self.debug.log("Gathering information for buffers. (2)");
@@ -492,19 +491,17 @@ MediaPlayer.dependencies.Stream = function () {
 
         initializePlayback = function () {
             var self = this,
-                initialize = Q.defer(),
-                manifest = self.manifestModel.getValue(),
-                isLive = self.manifestExt.getIsLive(manifest);
+                initialize = Q.defer();
 
             self.debug.log("Getting ready for playback...");
 
-            self.manifestExt.getDurationForPeriod(periodIndex, self.manifestModel.getValue(), isLive).then(
+            self.manifestExt.getDurationForPeriod(periodIndex, self.manifestModel.getValue()).then(
                 function(periodDuration) {
                     duration = periodDuration;
                 }
             );
 
-            self.manifestExt.getDuration(self.manifestModel.getValue(), isLive).then(
+            self.manifestExt.getDuration(self.manifestModel.getValue()).then(
                 function (duration) {
                     self.debug.log("Setting duration: " + duration);
                     return self.mediaSourceExt.setDuration(mediaSource, duration);
@@ -664,25 +661,15 @@ MediaPlayer.dependencies.Stream = function () {
 
         initPlayback = function() {
             var self = this,
-                manifest = self.manifestModel.getValue(),
-                isLive = self.manifestExt.getIsLive(manifest);
+                totalOffset;
 
-            if (isLive) {
-                self.manifestExt.getLiveEdge(self.manifestModel.getValue(), periodIndex).then(
-                    function (edge) {
-                        self.debug.log("Got live content.  Starting playback at offset: " + edge);
-                        seek.call(self, edge + self.getTimestampOffset() + self.getLiveOffset());
-                    }
-                );
-            } else {
-                self.manifestExt.getPresentationOffset(self.manifestModel.getValue(), periodIndex).then(
-                    function (offset) {
-                        self.debug.log("Got VOD content.  Starting playback at offset: " + offset);
-                        seek.call(self, offset + self.getTimestampOffset() + self.getLiveOffset());
-                    }
-                );
-            }
-
+            self.manifestExt.getInitialStartTime(self.manifestModel.getValue(), periodIndex).then(
+                function (startTime) {
+                    totalOffset = startTime + self.getTimestampOffset() + self.getLiveOffset();
+                    self.debug.log("Got content.  Starting playback at offset: " + totalOffset);
+                    seek.call(self, totalOffset);
+                }
+            );
         },
 
         currentTimeChanged = function () {

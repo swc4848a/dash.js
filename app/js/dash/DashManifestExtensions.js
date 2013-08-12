@@ -394,6 +394,26 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         }
     },
 
+    getIsLive: function (manifest) {
+        "use strict";
+        var isLive,
+            isDynamic,
+            hasLiveProfile;
+
+        isDynamic =  manifest.type == "dynamic";
+
+        if (manifest.profiles && manifest.profiles.length > 0) {
+            // TODO According to the mpeg-dash spec live profile string is 'urn:mpeg:dash:profile:isoff-live:2011',
+            // but it seems some videos leave out 'isoff-' part. So for now we just look for 'live' substring.
+            hasLiveProfile = (manifest.profiles.indexOf("live") !== -1);
+        }
+
+        //TODO For now we use only type value because sometimes on demand content can have a window that expires segments from the start.
+        isLive = isDynamic;// && hasLiveProfile;
+
+        return Q.when(isLive);
+    },
+
     getLiveOffset: function (manifest) {
         "use strict";
         var delay = 15;
@@ -525,27 +545,47 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         return Q.when(time);
     },
 
-    getIsLive: function (manifest) {
-        "use strict";
-        var isLive = false,
-            LIVE_TYPE = "dynamic";
+    getInitialStartTime: function (manifest, periodIndex) {
+        var self = this,
+            defer = Q.defer();
 
-        if (manifest.hasOwnProperty("type")) {
-            isLive = (manifest.type === LIVE_TYPE);
-        }
+        self.getIsLive(manifest).then(
+            function(isLive) {
+                if (isLive) {
+                    self.getLiveEdge(manifest, periodIndex).then(
+                        function (liveEdge) {
+                            defer.resolve(liveEdge);
+                        }
+                    );
+                } else {
+                    self.getPresentationOffset(manifest, periodIndex).then(
+                        function (presentationOffset) {
+                            defer.resolve(presentationOffset);
+                        }
+                    );
+                }
+            }
+        );
 
-        return isLive;
+        return defer.promise;
     },
 
-    getIsDVR: function (manifest, isLive) {
+    getIsDVR: function (manifest) {
         "use strict";
-        var containsDVR,
+        var self = this,
+            defer = Q.defer(),
+            containsDVR,
             isDVR;
 
-        containsDVR = !isNaN(manifest.timeShiftBufferDepth);
-        isDVR = (isLive && containsDVR);
+        self.getIsLive(manifest).then(
+            function(isLive) {
+                containsDVR = !isNaN(manifest.timeShiftBufferDepth);
+                isDVR = (isLive && containsDVR);
+                defer.resolve(isDVR);
+            }
+        );
 
-        return Q.when(isDVR);
+        return defer.promise;
     },
 
     getIsOnDemand: function (manifest) {
@@ -559,42 +599,58 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         return Q.when(isOnDemand);
     },
 
-    getDuration: function (manifest, isLive) {
+    getDuration: function (manifest) {
         "use strict";
-        var dur = NaN;
+        var self = this,
+            dur = NaN,
+            defer = Q.defer();
 
-        if (isLive) {
-            dur = Number.POSITIVE_INFINITY;
-        } else {
-            if (manifest.mediaPresentationDuration) {
-                dur = manifest.mediaPresentationDuration;
-            } else if (manifest.availabilityEndTime && manifest.availabilityStartTime) {
-                dur = (manifest.availabilityEndTime.getTime() - manifest.availabilityStartTime.getTime());
+        self.getIsLive(manifest).then(
+            function (isLive) {
+                if (isLive) {
+                    dur = Number.POSITIVE_INFINITY;
+                } else {
+                    if (manifest.mediaPresentationDuration) {
+                        dur = manifest.mediaPresentationDuration;
+                    } else if (manifest.availabilityEndTime && manifest.availabilityStartTime) {
+                        dur = (manifest.availabilityEndTime.getTime() - manifest.availabilityStartTime.getTime());
+                    }
+                }
+
+                defer.resolve(dur);
             }
-        }
+        );
 
-        return Q.when(dur);
+        return defer.promise;
     },
 
-    getDurationForPeriod: function (periodIndex, manifest, isLive) {
+    getDurationForPeriod: function (periodIndex, manifest) {
         "use strict";
-        var dur = NaN;
+        var self = this,
+            dur = NaN,
+            defer = Q.defer();
 
-        if (isLive) {
-            dur = Number.POSITIVE_INFINITY;
-        } else {
+        self.getIsLive(manifest).then(
+            function (isLive) {
+                if (isLive) {
+                    dur = Number.POSITIVE_INFINITY;
+                } else {
 
-            if(manifest.Period_asArray.length > 1 && manifest.Period_asArray[periodIndex].duration !== undefined)
-            {
-                dur = manifest.Period_asArray[periodIndex].duration;
-            } else if (manifest.mediaPresentationDuration) {
-                dur = manifest.mediaPresentationDuration;
-            } else if (manifest.availabilityEndTime && manifest.availabilityStartTime) {
-                dur = (manifest.availabilityEndTime.getTime() - manifest.availabilityStartTime.getTime());
+                    if(manifest.Period_asArray.length > 1 && manifest.Period_asArray[periodIndex].duration !== undefined)
+                    {
+                        dur = manifest.Period_asArray[periodIndex].duration;
+                    } else if (manifest.mediaPresentationDuration) {
+                        dur = manifest.mediaPresentationDuration;
+                    } else if (manifest.availabilityEndTime && manifest.availabilityStartTime) {
+                        dur = (manifest.availabilityEndTime.getTime() - manifest.availabilityStartTime.getTime());
+                    }
+
+                    defer.resolve(dur);
+                }
             }
-        }
+        );
 
-        return Q.when(dur);
+        return defer.promise;
     },
 
     getBandwidth: function (representation) {
@@ -628,7 +684,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         return Q.when(manifest.Period_asArray.length);
     },
 
-    getTimestampOffsetForPeriod: function (periodIndex, manifest, isLive) {
+    getTimestampOffsetForPeriod: function (periodIndex, manifest) {
         var self = this;
         return self.getStartOffsetForPeriod(manifest, periodIndex).then(
             function (time) {
@@ -640,7 +696,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
                         defferedOffset = Q.defer();
 
                     for(var i = 0; i < periodIndex; i++) {
-                        deferredDurations.push(self.getDurationForPeriod(i, manifest, isLive));
+                        deferredDurations.push(self.getDurationForPeriod(i, manifest));
                     }
 
                     Q.all(deferredDurations).then(

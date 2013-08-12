@@ -35,8 +35,6 @@ MediaPlayer.dependencies.BufferController = function () {
         onTimer = null,
         stalled = false,
         liveOffset = 0,
-        isLiveStream = false,
-        liveInitialization = false,
         deferredAppend = null,
         fragmentRequests = [],
         periodIndex = -1,
@@ -72,15 +70,6 @@ MediaPlayer.dependencies.BufferController = function () {
             }
         },
 
-        // TODO : Remove?
-        initializeLive = function () {
-            var manifest = this.manifestModel.getValue(),
-                isLive = this.manifestExt.getIsLive(manifest);
-
-            liveInitialization = true;
-
-            return Q.when(isLive);
-        },
 /*
         setCurrentTimeOnVideo = function (time) {
             var ct = this.videoModel.getCurrentTime();
@@ -100,15 +89,10 @@ MediaPlayer.dependencies.BufferController = function () {
 
             var self = this;
 
-            initializeLive.call(this).then(
-                function (isLive) {
-                    isLiveStream = isLive;
-                    self.debug.log("BufferController begin " + type + " validation with interval: " + validateInterval);
-                    setState.call(self, READY);
-                    clearInterval(timer);
-                    timer = setInterval(onTimer.bind(self), validateInterval, self);
-                }
-            );
+            self.debug.log("BufferController begin " + type + " validation with interval: " + validateInterval);
+            setState.call(self, READY);
+            clearInterval(timer);
+            timer = setInterval(onTimer.bind(self), validateInterval, self);
         },
 
         doStart = function () {
@@ -442,7 +426,6 @@ MediaPlayer.dependencies.BufferController = function () {
             self.debug.log(type + " Working time: " + currentTime);
             self.debug.log(type + " Video time: " + currentVideoTime);
 
-
             self.sourceBufferExt.getBufferLength(buffer, currentTime).then(
                 function (length) {
                     self.debug.log("Current " + type + " buffer length: " + length);
@@ -538,9 +521,7 @@ MediaPlayer.dependencies.BufferController = function () {
         errHandler: undefined,
 
         initialize: function (type, periodIndex, data, buffer, minBufferTime, videoModel) {
-            var self = this,
-                manifest = self.manifestModel.getValue(),
-                isLive = self.manifestExt.getIsLive(manifest);
+            var self = this;
 
             self.setVideoModel(videoModel);
             self.setType(type);
@@ -549,9 +530,13 @@ MediaPlayer.dependencies.BufferController = function () {
             self.setBuffer(buffer);
             self.setMinBufferTime(minBufferTime);
 
-            self.indexHandler.setIsLive(isLive);
+            self.manifestExt.getIsLive(self.manifestModel.getValue()).then(
+                function (isLive) {
+                    self.indexHandler.setIsLive(isLive);
+                }
+            );
 
-            self.manifestExt.getTimestampOffsetForPeriod(periodIndex, self.manifestModel.getValue(), isLive).then(
+            self.manifestExt.getTimestampOffsetForPeriod(periodIndex, self.manifestModel.getValue()).then(
                 function (offset) {
                     self.getBuffer().timestampOffset = offset;
                     timestampOffset = offset;
@@ -561,7 +546,7 @@ MediaPlayer.dependencies.BufferController = function () {
             self.manifestExt.getStartOffsetForPeriod(self.manifestModel.getValue(), periodIndex).then(
                 function (liveStartValue) {
                     liveOffset = liveStartValue;
-                    self.manifestExt.getDurationForPeriod(periodIndex, self.manifestModel.getValue(), isLive).then(
+                    self.manifestExt.getDurationForPeriod(periodIndex, self.manifestModel.getValue()).then(
                         function (duration) {
                             self.indexHandler.setDuration(duration + liveOffset);
                         }
