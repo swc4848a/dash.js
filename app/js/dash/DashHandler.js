@@ -299,19 +299,27 @@ Dash.dependencies.DashHandler = function () {
         },
 
         getIndexForSegments = function (time, segments) {
-            var idx = -1,
+            var segmentLastIdx = segments.length - 1,
+                idx = -1,
                 frag,
                 ft,
                 fd,
                 i;
 
             if (segments && segments.length > 0) {
-                for (i = segments.length - 1; i >= 0; i--) {
+                for (i = segmentLastIdx; i >= 0; i--) {
                     frag = segments[i];
                     ft = frag.startTime / frag.timescale;
                     fd = frag.duration / frag.timescale;
-                    if (time >= ft && time <= (ft + fd)) {
+
+                    if (i === (segmentLastIdx) && time > (ft + fd)) {
+                        idx = segmentLastIdx;
+                        break;
+                    } else if (time >= ft && time <= (ft + fd)) {
                         idx = i;
+                        break;
+                    } else if (i === 0 && time < ft) {
+                        idx = 0;
                         break;
                     }
                 }
