@@ -380,7 +380,10 @@ Dash.dependencies.DashHandler = function () {
             dur = (fDuration / fTimescale);
             idx = Math.floor(time / dur);
 
-            idx += startNumber; // apply first item offset
+            // For live streaming we have already counted startNumber offset in DashManifestExtensions.getLiveEdge()
+            if (!isLive) {
+                idx += startNumber; // apply first item offset
+            }
 
             return Q.when(idx);
         },
