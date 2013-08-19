@@ -13,8 +13,7 @@
  */
 MediaPlayer.dependencies.BufferController = function () {
     "use strict";
-    var validateInterval = 1000,
-        STALL_THRESHOLD = 0.5,
+    var STALL_THRESHOLD = 0.5,
         WAITING = "WAITING",
         READY = "READY",
         VALIDATING = "VALIDATING",
@@ -31,8 +30,6 @@ MediaPlayer.dependencies.BufferController = function () {
         dataChanged = true,
         playingTime,
         lastQuality = -1,
-        timer = null,
-        onTimer = null,
         stalled = false,
         liveOffset = 0,
         deferredAppend = null,
@@ -89,18 +86,15 @@ MediaPlayer.dependencies.BufferController = function () {
 
             var self = this;
 
-            self.debug.log("BufferController begin " + type + " validation with interval: " + validateInterval);
+            self.debug.log("BufferController begin " + type + " validation with interval: " + self.requestScheduler.getValidateInterval(self));
             setState.call(self, READY);
-            clearInterval(timer);
-            timer = setInterval(onTimer.bind(self), validateInterval, self);
+
+            self.requestScheduler.stopScheduling(self);
+            self.requestScheduler.startScheduling(self, validate);
         },
 
         doStart = function () {
             var currentTime;
-
-            if (timer !== null) {
-                return;
-            }
 
             if (seeking === false) {
                 currentTime = new Date();
@@ -132,8 +126,7 @@ MediaPlayer.dependencies.BufferController = function () {
         doStop = function () {
             this.debug.log("BufferController " + type + " stop.");
             setState.call(this, WAITING);
-            clearInterval(timer);
-            timer = null;
+            this.requestScheduler.stopScheduling(this);
 
             started = false;
             waitingForBuffer = false;
@@ -444,7 +437,7 @@ MediaPlayer.dependencies.BufferController = function () {
                         }
                     } else if (state === READY) {
                         setState.call(self, VALIDATING);
-                        self.bufferExt.shouldBufferMore(length, validateInterval / 1000.0).then(
+                        self.bufferExt.shouldBufferMore(length, self.requestScheduler.getValidateInterval(self) / 1000.0).then(
                             function (shouldBuffer) {
                                 //self.debug.log("Buffer more " + type + ": " + shouldBuffer);
                                 if (shouldBuffer) {
@@ -500,10 +493,6 @@ MediaPlayer.dependencies.BufferController = function () {
             );
         };
 
-    onTimer = function () {
-        validate.call(this);
-    };
-
     return {
         videoModel: undefined,
         metricsModel: undefined,
@@ -519,6 +508,8 @@ MediaPlayer.dependencies.BufferController = function () {
         debug: undefined,
         system: undefined,
         errHandler: undefined,
+        requestScheduler: undefined,
+        schedulerExt: undefined,
 
         initialize: function (type, periodIndex, data, buffer, minBufferTime, videoModel) {
             var self = this;
@@ -652,12 +643,10 @@ MediaPlayer.dependencies.BufferController = function () {
         setMinBufferTime: function (value) {
             var self = this;
             minBufferTime = value;
-            validateInterval = (minBufferTime * 1000.0) / 4;
-            validateInterval = Math.max(validateInterval, 1000);
-            if (timer !== null) {
-                self.debug.log("Changing " + type + " validate interval: " + validateInterval);
-                clearInterval(timer);
-                timer = setInterval(onTimer.bind(this), validateInterval, this);
+            if (self.requestScheduler.isScheduled(self)) {
+                self.debug.log("Changing " + type + " validate interval: " + self.requestScheduler.getValidateInterval(self));
+                self.requestScheduler.stopScheduling(self);
+                self.requestScheduler.startScheduling(self, validate);
             }
         },
 
