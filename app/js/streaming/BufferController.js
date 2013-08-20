@@ -521,9 +521,9 @@ MediaPlayer.dependencies.BufferController = function () {
             self.setBuffer(buffer);
             self.setMinBufferTime(minBufferTime);
 
-            self.manifestExt.getIsLive(self.manifestModel.getValue()).then(
-                function (isLive) {
-                    self.indexHandler.setIsLive(isLive);
+            self.manifestExt.getIsDynamic(self.manifestModel.getValue()).then(
+                function (isDynamic) {
+                    self.indexHandler.setIsDynamic(isDynamic);
                 }
             );
 

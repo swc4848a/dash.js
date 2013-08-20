@@ -15,7 +15,7 @@ Dash.dependencies.DashHandler = function () {
     "use strict";
 
     var index = -1,
-        isLive,
+        isDynamic,
         duration,
         type,
 
@@ -135,7 +135,7 @@ Dash.dependencies.DashHandler = function () {
                 isFinished = false;
 
             this.debug.log("Checking for stream end...");
-            if (isLive) {
+            if (isDynamic) {
                 this.debug.log("Live never ends! (TODO)");
                 // TODO : Check the contents of the last box to signal end.
                 isFinished = false;
@@ -381,7 +381,7 @@ Dash.dependencies.DashHandler = function () {
             idx = Math.floor(time / dur);
 
             // For live streaming we have already counted startNumber offset in DashManifestExtensions.getLiveEdge()
-            if (!isLive) {
+            if (!isDynamic) {
                 idx += startNumber; // apply first item offset
             }
 
@@ -650,11 +650,11 @@ Dash.dependencies.DashHandler = function () {
             type = value;
         },
 
-        getIsLive: function () {
-            return isLive;
+        getIsDynamic: function () {
+            return isDynamic;
         },
-        setIsLive: function (value) {
-            isLive = value;
+        setIsDynamic: function (value) {
+            isDynamic = value;
         },
 
         getDuration: function () {

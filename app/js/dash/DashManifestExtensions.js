@@ -394,24 +394,11 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         }
     },
 
-    getIsLive: function (manifest) {
+    getIsDynamic: function (manifest) {
         "use strict";
-        var isLive,
-            isDynamic,
-            hasLiveProfile;
+        var isDynamic =  manifest.type == "dynamic";
 
-        isDynamic =  manifest.type == "dynamic";
-
-        if (manifest.profiles && manifest.profiles.length > 0) {
-            // TODO According to the mpeg-dash spec live profile string is 'urn:mpeg:dash:profile:isoff-live:2011',
-            // but it seems some videos leave out 'isoff-' part. So for now we just look for 'live' substring.
-            hasLiveProfile = (manifest.profiles.indexOf("live") !== -1);
-        }
-
-        //TODO For now we use only type value because sometimes on demand content can have a window that expires segments from the start.
-        isLive = isDynamic;// && hasLiveProfile;
-
-        return Q.when(isLive);
+        return Q.when(isDynamic);
     },
 
     getLiveOffset: function (manifest) {
@@ -549,9 +536,9 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         var self = this,
             defer = Q.defer();
 
-        self.getIsLive(manifest).then(
-            function(isLive) {
-                if (isLive) {
+        self.getIsDynamic(manifest).then(
+            function(isDynamic) {
+                if (isDynamic) {
                     self.getLiveEdge(manifest, periodIndex).then(
                         function (liveEdge) {
                             defer.resolve(liveEdge);
@@ -577,10 +564,10 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             containsDVR,
             isDVR;
 
-        self.getIsLive(manifest).then(
-            function(isLive) {
+        self.getIsDynamic(manifest).then(
+            function(isDynamic) {
                 containsDVR = !isNaN(manifest.timeShiftBufferDepth);
-                isDVR = (isLive && containsDVR);
+                isDVR = (isDynamic && containsDVR);
                 defer.resolve(isDVR);
             }
         );
@@ -605,9 +592,9 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             dur = NaN,
             defer = Q.defer();
 
-        self.getIsLive(manifest).then(
-            function (isLive) {
-                if (isLive) {
+        self.getIsDynamic(manifest).then(
+            function (isDynamic) {
+                if (isDynamic) {
                     dur = Number.POSITIVE_INFINITY;
                 } else {
                     if (manifest.mediaPresentationDuration) {
@@ -630,9 +617,9 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             dur = NaN,
             defer = Q.defer();
 
-        self.getIsLive(manifest).then(
-            function (isLive) {
-                if (isLive) {
+        self.getIsDynamic(manifest).then(
+            function (isDynamic) {
+                if (isDynamic) {
                     dur = Number.POSITIVE_INFINITY;
                 } else {
 
