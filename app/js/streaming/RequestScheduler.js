@@ -14,37 +14,136 @@
  MediaPlayer.dependencies.RequestScheduler = function () {
     "use strict";
 
+     /*
+      * RequestScheduler controls the time of calling of functions to be executed on shchedule
+      */
+
     var schedulerModels = [],
+        isPeriodicListenerStarted = false,
 
-        startScheduling = function(bufferController, callback) {
-            if(!bufferController || !callback) return;
+        /*
+         * Calls the execution function only ones for provided date or time interval in milliseconds
+         *
+         * @param executeContext The object to be used as execution context
+         * @param executeFunction The function to be executed on schedule
+         * @time The date or time interval the executeFunction must be called
+         *
+         */
+        scheduleOnce = function(executeContext, executeFunction, time) {
+            if(!executeContext || !executeFunction) return;
 
-            var schedulerModel = findSchedulerModel(bufferController);
+            var interval,
+                schedulerModel,
+                scheduledTask;
 
-            if (!schedulerModel) {
-                schedulerModel = registerSchedulerModel.call(this, bufferController);
+            // calculate interval for date
+            if (time instanceof Date) {
+                interval = new Date() - time;
+            } else if (typeof time === 'number') {
+            // use as is for number value
+                interval = time;
+            } else {
+            // we cannot use provided time value to continue
+                throw "incorrect time value";
             }
 
-            schedulerModel.setValidateCallback( wrapValidationCallback.call(this, schedulerModel, callback) );
-            schedulerModel.setLastValidateTime(new Date());
+            schedulerModel = registerSchedulerModel.call(this, executeContext);
+            scheduledTask = createScheduledTask.call(this, schedulerModel, executeFunction, false);
+            schedulerModel.setScheduledTask(scheduledTask);
+            schedulerModel.setIsScheduled(false);
+            executeTaskForTime(schedulerModel, interval);
+        },
+
+        /*
+         * Executes the scheduled task in provided interval
+         *
+         * @param schedulerModel
+         * @param interval
+         *
+         */
+        executeTaskForTime = function(schedulerModel, interval) {
+            var timeoutId = setTimeout(schedulerModel.getScheduledTask(), interval);
+            schedulerModel.setExecuteId(timeoutId);
+        },
+
+        /*
+         * Cancels the scheduled call for executeContex
+         *
+         * @param executeContext The object to be used as execution context
+         *
+         */
+        unscheduleOnce = function(executeContext) {
+            var schedulerModel = findSchedulerModel(executeContext);
+
+            if (schedulerModel) {
+                clearTimeout(schedulerModel.getExecuteId());
+                unregisterSchedulerModel(schedulerModel);
+            }
+        },
+
+        /*
+         * Prepares and runs the execution functions to be called on schedule
+         *
+         * @param executeContext The object to be used as execution context
+         * @param executeFunction The function to be executed on schedule
+         *
+         */
+        startScheduling = function(executeContext, executeFunction) {
+            if(!executeContext || !executeFunction) return;
+
+            // Searching for existing model for the passed context
+            var schedulerModel = findSchedulerModel(executeContext),
+                scheduledTask;
+
+            // if we have not stored the model yet, do it now
+            if (!schedulerModel) {
+                schedulerModel = registerSchedulerModel.call(this, executeContext);
+            }
+
+            scheduledTask = createScheduledTask.call(this, schedulerModel, executeFunction, true);
+            schedulerModel.setScheduledTask(scheduledTask);
             schedulerModel.setIsScheduled(true);
-            startValidation.call(this, schedulerModel);
-            //TODO: for now we have to call callback 'manually' for the first time before it can be called from event listener
-            callback.call(bufferController);
+            startPeriodicScheduleListener.call(this, schedulerModel);
+            //TODO: for now we have to call executeFunction 'manually' for the first time before it can be called from event listener
+            schedulerModel.setLastExecuteTime(new Date());
+            executeFunction.call(executeContext);
         },
 
-        registerSchedulerModel = function (bufferController) {
-             if(!bufferController) return null;
+        /*
+         * Creates and stores SchedulerModel object
+         *
+         * @param executeContext
+         */
+        registerSchedulerModel = function (executeContext) {
+            if(!executeContext) return null;
 
-             var model = this.system.getObject("schedulerModel");
-             model.setBufferController(bufferController);
-             schedulerModels.push(model);
-             return model;
+            var model = this.system.getObject("schedulerModel");
+            model.setContext(executeContext);
+            schedulerModels.push(model);
+            return model;
         },
 
-        findSchedulerModel = function(bufferController) {
+        /*
+         * Removes SchedulerModel from stored list
+         *
+         * @param schedulerModel The model to be removed from list
+         */
+        unregisterSchedulerModel = function (schedulerModel) {
+            var index = schedulerModels.indexOf(schedulerModel);
+
+            if (index !== -1) {
+                schedulerModels.splice(index, 1);
+            }
+        },
+
+        /*
+         * Searches for stored SchedulerModel by executeContex
+         *
+         * @param executeContext
+         */
+        findSchedulerModel = function(executeContext) {
             for (var i = 0; i < schedulerModels.length; i++) {
-                if (schedulerModels[i].getBufferController() === bufferController) {
+                if (schedulerModels[i].getContext() === executeContext) {
                     return schedulerModels[i];
                 }
             }
@@ -52,33 +151,90 @@
             return null;
         },
 
-        wrapValidationCallback = function(schedulerModel, callback) {
-            return function() {
-                //TODO: probably we need some threshold for calling validation callback
-                var now = new Date();
-                callback.call(schedulerModel.getBufferController());
-                schedulerModel.setLastValidateTime(now);
+        /*
+         * Wraps the execute function in more abstract ScheduledTask for a greater flexibiliy
+         *
+         * @param schedulerModel
+         * @param executeFunction The function to be executed as part of ScheduledTask
+         *
+         */
+        createScheduledTask = function(schedulerModel, executeFunction, isPeriodic) {
+            var scheduledTask = function() {
+                //TODO: probably we need some threshold for calling executeFunction
+
+                executeFunction.call(schedulerModel.getContext());
+
+                // remember the last execution time for period task or remove model for one-time tasks
+                if (isPeriodic) {
+                    var now = new Date();
+                    schedulerModel.setLastExecuteTime(now);
+                } else {
+                    unregisterSchedulerModel(schedulerModel);
+                }
             };
+
+            return scheduledTask;
         },
 
-        startValidation = function(schedulerModel) {
-            var element = schedulerModel.getBufferController().getVideoModel().getElement(),
-                callback = schedulerModel.getValidateCallback();
-            this.schedulerExt.startValidation(element, callback);
-        },
+        /*
+         * Called when the periodic scheduled event occures
+         *
+         */
+        onScheduledTimeOccurred = function() {
+            var schedulerModel;
 
-        stopScheduling = function(bufferController) {
-            var schedulerModel = findSchedulerModel(bufferController);
-            if (schedulerModel) {
-                stopValidation.call(this, schedulerModel);
-                schedulerModel.setIsScheduled(false);
+            for (var i = 0; i < schedulerModels.length; i++) {
+                schedulerModel = schedulerModels[i];
+
+                if (schedulerModel.getIsScheduled()) {
+                    schedulerModel.getScheduledTask().call();
+                }
             }
         },
 
-        stopValidation = function(schedulerModel) {
-            var element = schedulerModel.getBufferController().getVideoModel().getElement(),
-                callback = schedulerModel.getValidateCallback();
-            this.schedulerExt.stopValidation(element, callback);
+        /*
+         * Binds schedule lisstener to corresponding element
+         *
+         * @param schedulerModel
+         *
+         */
+        startPeriodicScheduleListener = function(schedulerModel) {
+            if (isPeriodicListenerStarted) return;
+
+            isPeriodicListenerStarted = true;
+            //TODO: we need to find a better way to get correct video element
+            var element = schedulerModel.getContext().getVideoModel().getElement();
+            this.schedulerExt.attachScheduleListener(element, onScheduledTimeOccurred);
+        },
+
+        /*
+         * Stops scheduling and executon of scheduled task for executeContext
+         *
+         * @param executeContext
+         *
+         */
+        stopScheduling = function(executeContext) {
+            var schedulerModel = findSchedulerModel(executeContext);
+            if (schedulerModel) {
+                schedulerModel.setIsScheduled(false);
+                unregisterSchedulerModel(schedulerModel);
+                if (schedulerModels.length === 0) {
+                    stopPeriodicScheduleListener.call(this, schedulerModel);
+                }
+            }
+        },
+
+        /*
+         * Unbinds the schedule listener from corresponding element
+         *
+         * @param schedulerModel
+         *
+         */
+        stopPeriodicScheduleListener = function(schedulerModel) {
+            //TODO: we need to find a better way to get correct video element
+            var element = schedulerModel.getContext().getVideoModel().getElement();
+            this.schedulerExt.detachScheduleListener(element, onScheduledTimeOccurred);
+            isPeriodicListenerStarted = false;
         };
 
     return {
@@ -87,18 +243,33 @@
         debug: undefined,
         schedulerExt: undefined,
 
-        isScheduled: function(bufferController) {
-            var schedulerModel = findSchedulerModel(bufferController);
+        /*
+         * Indicates whether the executeContex has scheduled task or not
+         *
+         * @param executeContext
+         *
+         */
+        isScheduled: function(executeContext) {
+            var schedulerModel = findSchedulerModel(executeContext);
             return (!!schedulerModel && schedulerModel.getIsScheduled());
         },
 
-        getValidateInterval: function (bufferController) {
-            var schedulerModel = findSchedulerModel(bufferController);
-            return (schedulerModel ? schedulerModel.getValidateInterval() : null);
+        /*
+         * Gets the execution interval for scheduled task of executeContex
+         *
+         * @param executeContext
+         *
+         */
+        getExecuteInterval: function (executeContext) {
+            var schedulerModel = findSchedulerModel(executeContext);
+            return (schedulerModel ? schedulerModel.getExecuteInterval() : null);
         },
 
         startScheduling: startScheduling,
-        stopScheduling: stopScheduling
+        stopScheduling: stopScheduling,
+        // TODO find more appropriate names for these methods
+        scheduleOnce: scheduleOnce,
+        unscheduleOnce: unscheduleOnce
     };
 };
 

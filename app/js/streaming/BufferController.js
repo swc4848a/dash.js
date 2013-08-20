@@ -86,7 +86,7 @@ MediaPlayer.dependencies.BufferController = function () {
 
             var self = this;
 
-            self.debug.log("BufferController begin " + type + " validation with interval: " + self.requestScheduler.getValidateInterval(self));
+            self.debug.log("BufferController begin " + type + " validation with interval: " + self.requestScheduler.getExecuteInterval(self));
             setState.call(self, READY);
 
             self.requestScheduler.stopScheduling(self);
@@ -437,7 +437,7 @@ MediaPlayer.dependencies.BufferController = function () {
                         }
                     } else if (state === READY) {
                         setState.call(self, VALIDATING);
-                        self.bufferExt.shouldBufferMore(length, self.requestScheduler.getValidateInterval(self) / 1000.0).then(
+                        self.bufferExt.shouldBufferMore(length, self.requestScheduler.getExecuteInterval(self) / 1000.0).then(
                             function (shouldBuffer) {
                                 //self.debug.log("Buffer more " + type + ": " + shouldBuffer);
                                 if (shouldBuffer) {
@@ -644,7 +644,7 @@ MediaPlayer.dependencies.BufferController = function () {
             var self = this;
             minBufferTime = value;
             if (self.requestScheduler.isScheduled(self)) {
-                self.debug.log("Changing " + type + " validate interval: " + self.requestScheduler.getValidateInterval(self));
+                self.debug.log("Changing " + type + " validate interval: " + self.requestScheduler.getExecuteInterval(self));
                 self.requestScheduler.stopScheduling(self);
                 self.requestScheduler.startScheduling(self, validate);
             }

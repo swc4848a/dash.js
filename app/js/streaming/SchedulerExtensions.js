@@ -18,17 +18,22 @@ MediaPlayer.dependencies.SchedulerExtensions = function () {
 MediaPlayer.dependencies.SchedulerExtensions.prototype = {
     constructor: MediaPlayer.dependencies.SchedulerExtensions,
 
-//    getValidateInterval: function(bufferController) {
-//        var interval = (bufferController.getMinBufferTime() * 1000.0) / 4;
-//        interval = Math.max(interval, 1000);
-//        return interval;
-//    },
+    getExecuteInterval: function(context) {
+        var interval = 1000;
 
-    startValidation: function(element, validateCallback) {
-        element.addEventListener("timeupdate", validateCallback);
+        if (typeof(context.getMinBufferTime) !== "undefined") {
+            interval = (context.getMinBufferTime() * 1000.0) / 4;
+            interval = Math.max(interval, 1000);
+        }
+
+        return interval;
     },
 
-    stopValidation: function(element, validateCallback) {
-        element.removeEventListener("timeupdate", validateCallback);
+    attachScheduleListener: function(element, scheduleListener) {
+        element.addEventListener("timeupdate", scheduleListener);
+    },
+
+    detachScheduleListener: function(element, scheduleListener) {
+        element.removeEventListener("timeupdate", scheduleListener);
     }
 };

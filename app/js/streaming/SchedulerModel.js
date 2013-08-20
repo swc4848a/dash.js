@@ -15,9 +15,10 @@
 MediaPlayer.dependencies.SchedulerModel = function () {
     "use strict";
 
-    var bufferController,
-        validateCallback,
-        lastValidateTime,
+    var context,
+        scheduledTask,
+        lastExecuteTime,
+        executeId,
         isScheduled = false;
 
     return {
@@ -25,28 +26,28 @@ MediaPlayer.dependencies.SchedulerModel = function () {
         debug: undefined,
         schedulerExt: undefined,
 
-        setBufferController: function(value) {
-            bufferController = value;
+        setContext: function(value) {
+            context = value;
         },
 
-        getBufferController: function() {
-            return bufferController;
+        getContext: function() {
+            return context;
         },
 
-        setValidateCallback: function(value) {
-            validateCallback = value;
+        setScheduledTask: function(value) {
+            scheduledTask = value;
         },
 
-        getValidateCallback: function() {
-            return validateCallback;
+        getScheduledTask: function() {
+            return scheduledTask;
         },
 
-        setLastValidateTime: function(value) {
-            lastValidateTime = value;
+        setLastExecuteTime: function(value) {
+            lastExecuteTime = value;
         },
 
-        getLastValidateTime: function() {
-            return lastValidateTime;
+        getLastExecuteTime: function() {
+            return lastExecuteTime;
         },
 
         setIsScheduled: function(value) {
@@ -57,8 +58,16 @@ MediaPlayer.dependencies.SchedulerModel = function () {
             return isScheduled;
         },
 
-        getValidateInterval: function () {
-            return this.schedulerExt.getValidateInterval(bufferController);
+        getExecuteInterval: function () {
+            return this.schedulerExt.getExecuteInterval(context);
+        },
+
+        setExecuteId: function(value) {
+            executeId = value;
+        },
+
+        getExecuteId: function () {
+            return executeId;
         }
     };
 };
