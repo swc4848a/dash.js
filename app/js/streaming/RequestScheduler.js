@@ -103,7 +103,7 @@
             scheduledTask = createScheduledTask.call(this, schedulerModel, executeFunction, true);
             schedulerModel.setScheduledTask(scheduledTask);
             schedulerModel.setIsScheduled(true);
-            startPeriodicScheduleListener.call(this, schedulerModel);
+            startPeriodicScheduleListener.call(this);
             //TODO: for now we have to call executeFunction 'manually' for the first time before it can be called from event listener
             schedulerModel.setLastExecuteTime(new Date());
             executeFunction.call(executeContext);
@@ -198,12 +198,11 @@
          * @param schedulerModel
          *
          */
-        startPeriodicScheduleListener = function(schedulerModel) {
+        startPeriodicScheduleListener = function() {
             if (isPeriodicListenerStarted) return;
 
             isPeriodicListenerStarted = true;
-            //TODO: we need to find a better way to get correct video element
-            var element = schedulerModel.getContext().getVideoModel().getElement();
+            var element = this.videoModel.getElement();
             this.schedulerExt.attachScheduleListener(element, onScheduledTimeOccurred);
         },
 
@@ -219,7 +218,7 @@
                 schedulerModel.setIsScheduled(false);
                 unregisterSchedulerModel(schedulerModel);
                 if (schedulerModels.length === 0) {
-                    stopPeriodicScheduleListener.call(this, schedulerModel);
+                    stopPeriodicScheduleListener.call(this);
                 }
             }
         },
@@ -230,9 +229,8 @@
          * @param schedulerModel
          *
          */
-        stopPeriodicScheduleListener = function(schedulerModel) {
-            //TODO: we need to find a better way to get correct video element
-            var element = schedulerModel.getContext().getVideoModel().getElement();
+        stopPeriodicScheduleListener = function() {
+            var element = this.videoModel.getElement();
             this.schedulerExt.detachScheduleListener(element, onScheduledTimeOccurred);
             isPeriodicListenerStarted = false;
         };

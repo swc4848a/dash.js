@@ -508,10 +508,8 @@ MediaPlayer.dependencies.BufferController = function () {
         debug: undefined,
         system: undefined,
         errHandler: undefined,
-        requestScheduler: undefined,
-        schedulerExt: undefined,
 
-        initialize: function (type, periodIndex, data, buffer, minBufferTime, videoModel) {
+        initialize: function (type, periodIndex, data, buffer, minBufferTime, videoModel, scheduler) {
             var self = this;
 
             self.setVideoModel(videoModel);
@@ -519,6 +517,7 @@ MediaPlayer.dependencies.BufferController = function () {
             self.setPeriodIndex(periodIndex);
             self.setData(data);
             self.setBuffer(buffer);
+            self.setScheduler(scheduler);
             self.setMinBufferTime(minBufferTime);
 
             self.manifestExt.getIsDynamic(self.manifestModel.getValue()).then(
@@ -575,6 +574,14 @@ MediaPlayer.dependencies.BufferController = function () {
 
         setVideoModel: function (value) {
             this.videoModel = value;
+        },
+
+        getScheduler: function () {
+            return this.requestScheduler;
+        },
+
+        setScheduler: function (value) {
+            this.requestScheduler = value;
         },
 
         getTimestampOffset: function() {

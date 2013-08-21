@@ -358,7 +358,7 @@ MediaPlayer.dependencies.Stream = function () {
                                             // TODO : Pass to controller and then pass to each method on handler?
 
                                             videoController = self.system.getObject("bufferController");
-                                            videoController.initialize("video", periodIndex, videoData, buffer, minBufferTime, self.videoModel);
+                                            videoController.initialize("video", periodIndex, videoData, buffer, minBufferTime, self.videoModel, self.requestScheduler);
                                             self.debug.log("Video is ready!");
                                         }
 
@@ -414,7 +414,7 @@ MediaPlayer.dependencies.Stream = function () {
                                                     // TODO : How to tell index handler live/duration?
                                                     // TODO : Pass to controller and then pass to each method on handler?
                                                     audioController = self.system.getObject("bufferController");
-                                                    audioController.initialize("audio", periodIndex, primaryAudioData, buffer, minBufferTime, self.videoModel);
+                                                    audioController.initialize("audio", periodIndex, primaryAudioData, buffer, minBufferTime, self.videoModel, self.requestScheduler);
                                                     self.debug.log("Audio is ready!");
                                                 }
 
@@ -744,6 +744,7 @@ MediaPlayer.dependencies.Stream = function () {
         debug: undefined,
         metricsExt: undefined,
         errHandler: undefined,
+        requestScheduler: undefined,
 
         setup: function () {
             this.system.mapHandler("manifestUpdated", undefined, manifestHasUpdated.bind(this));
@@ -773,6 +774,7 @@ MediaPlayer.dependencies.Stream = function () {
             this.videoModel.listen("seeking", seekingListener);
             this.videoModel.listen("timeupdate", timeupdateListener);
             this.videoModel.listen("loadedmetadata", loadedListener);
+            this.requestScheduler.videoModel = value;
         },
 
         initProtection: function() {
