@@ -190,13 +190,13 @@ MediaPlayer.dependencies.BufferController = function () {
                                             self.debug.log("Buffered " + type + " Range: " + ranges.start(i) + " - " + ranges.end(i));
                                         }
                                     }
-                                    finishValidation.call(self);
+                                    requestNewFragment.call(self);
                                 });
                             }
                         );
                     } else {
                         self.debug.log("No " + type + " bytes to push.");
-                        finishValidation.call(self);
+                        requestNewFragment.call(self);
                     }
                 }
             );
@@ -409,18 +409,9 @@ MediaPlayer.dependencies.BufferController = function () {
             return time;
         },
 
-        validate = function () {
+        requestNewFragment = function() {
             var self = this,
-                newQuality,
-                representation = null,
-                now = new Date(),
-                currentVideoTime = self.videoModel.getCurrentTime(),
                 currentTime = getWorkingTime.call(self);
-
-            self.debug.log("BufferController.validate() " + type + " | state: " + state);
-            self.debug.log(type + " Playback rate: " + self.videoModel.getElement().playbackRate);
-            self.debug.log(type + " Working time: " + currentTime);
-            self.debug.log(type + " Video time: " + currentVideoTime);
 
             self.sourceBufferExt.getBufferLength(buffer, currentTime).then(
                 function (length) {
@@ -438,62 +429,18 @@ MediaPlayer.dependencies.BufferController = function () {
                             waitingForBuffer = true;
                             self.videoModel.stallStream(type, stalled);
                         }
-                    } else if (state === READY) {
-                        setState.call(self, VALIDATING);
+                    } else {
                         self.bufferExt.shouldBufferMore(length, self.requestScheduler.getExecuteInterval(self) / 1000.0).then(
                             function (shouldBuffer) {
-                                //self.debug.log("Buffer more " + type + ": " + shouldBuffer);
                                 if (shouldBuffer) {
-                                    self.abrController.getPlaybackQuality(type, data).then(
-                                        function (quality) {
-                                            self.debug.log(type + " Playback quality: " + quality);
-                                            self.debug.log("Populate " + type + " buffers.");
-
-                                            if (quality !== undefined) {
-                                                newQuality = quality;
-                                            }
-
-                                            qualityChanged = (quality !== lastQuality);
-
-                                            if (qualityChanged === true) {
-                                                representation = getRepresentationForQuality(newQuality, self.getData());
-
-                                                if (representation === null || representation === undefined) {
-                                                    throw "Unexpected error!";
-                                                }
-
-                                                clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.REPRESENTATION_SWITCH_STOP_REASON);
-                                                self.metricsModel.addRepresentationSwitch(type, now, currentVideoTime, representation.id);
-                                            }
-
-                                            self.debug.log(qualityChanged ? (type + " Quality changed to: " + quality) : "Quality didn't change.");
-                                            return loadInitialization.call(self, qualityChanged, quality);
-                                        }
-                                    ).then(
-                                        function (request) {
-                                            var deferred = null;
-                                            if (request !== null) {
-                                                deferred = Q.defer();
-                                                self.debug.log("Loading " + type + " initialization: " + request.url);
-                                                self.debug.log(request);
-                                                setState.call(self, LOADING);
-                                                self.fragmentLoader.load(request).then(function(response){
-                                                    onBytesLoaded.call(self, request, response);
-                                                    deferred.resolve();
-                                                }, onBytesError.bind(self, request));
-                                                lastQuality = newQuality;
-                                            }
-                                            Q.when(deferred ? deferred.promise : true).then(
-                                                function() {
-                                                    loadNextFragment.call(self, newQuality).then(onFragmentRequest.bind(self));
-                                            });
-                                        }
-                                    );
+                                    //self.debug.log("Buffer more " + type + ": " + shouldBuffer);
+                                    loadNextFragment.call(self, lastQuality).then(onFragmentRequest.bind(self));
                                 } else {
                                     seeking = false;
-
                                     if (state === VALIDATING) {
                                         setState.call(self, READY);
+                                    } else {
+                                        finishValidation.call(self);
                                     }
                                 }
                             }
@@ -501,6 +448,68 @@ MediaPlayer.dependencies.BufferController = function () {
                     }
                 }
             );
+        },
+
+        validate = function () {
+            var self = this,
+                newQuality,
+                representation = null,
+                now = new Date(),
+                currentVideoTime = self.videoModel.getCurrentTime();
+
+            self.debug.log("BufferController.validate() " + type + " | state: " + state);
+            self.debug.log(type + " Playback rate: " + self.videoModel.getElement().playbackRate);
+            self.debug.log(type + " Video time: " + currentVideoTime);
+
+            if (state === READY) {
+                setState.call(self, VALIDATING);
+                self.abrController.getPlaybackQuality(type, data).then(
+                    function (quality) {
+                        self.debug.log(type + " Playback quality: " + quality);
+                        self.debug.log("Populate " + type + " buffers.");
+
+                        if (quality !== undefined) {
+                            newQuality = quality;
+                        }
+
+                        qualityChanged = (quality !== lastQuality);
+
+                        if (qualityChanged === true) {
+                            representation = getRepresentationForQuality(newQuality, self.getData());
+
+                            if (representation === null || representation === undefined) {
+                                throw "Unexpected error!";
+                            }
+
+                            clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.REPRESENTATION_SWITCH_STOP_REASON);
+                            self.metricsModel.addRepresentationSwitch(type, now, currentVideoTime, representation.id);
+                        }
+
+                        self.debug.log(qualityChanged ? (type + " Quality changed to: " + quality) : "Quality didn't change.");
+                        return loadInitialization.call(self, qualityChanged, quality);
+                    }
+                ).then(
+                    function (request) {
+                        var deferred = null;
+                        if (request !== null) {
+                            deferred = Q.defer();
+                            self.debug.log("Loading " + type + " initialization: " + request.url);
+                            self.debug.log(request);
+                            setState.call(self, LOADING);
+                            self.fragmentLoader.load(request).then(function(response){
+                                onBytesLoaded.call(self, request, response);
+                                deferred.resolve();
+                            }, onBytesError.bind(self, request));
+                            lastQuality = newQuality;
+                        }
+                        Q.when(deferred ? deferred.promise : true).then(
+                            function() {
+                                setState.call(self, READY);
+                                requestNewFragment.call(self);
+                        });
+                    }
+                );
+            }
         };
 
     return {
@@ -658,7 +667,6 @@ MediaPlayer.dependencies.BufferController = function () {
         },
 
         setMinBufferTime: function (value) {
-            var self = this;
             minBufferTime = value;
         },
 
