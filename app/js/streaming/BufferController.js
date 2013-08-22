@@ -86,15 +86,18 @@ MediaPlayer.dependencies.BufferController = function () {
 
             var self = this;
 
-            self.debug.log("BufferController begin " + type + " validation with interval: " + self.requestScheduler.getExecuteInterval(self));
+            self.debug.log("BufferController begin " + type + " validation");
             setState.call(self, READY);
 
-            self.requestScheduler.stopScheduling(self);
             self.requestScheduler.startScheduling(self, validate);
         },
 
         doStart = function () {
             var currentTime;
+
+            if(this.requestScheduler.isScheduled(this)) {
+                return;
+            }
 
             if (seeking === false) {
                 currentTime = new Date();
@@ -468,15 +471,22 @@ MediaPlayer.dependencies.BufferController = function () {
                                         }
                                     ).then(
                                         function (request) {
+                                            var deferred = null;
                                             if (request !== null) {
+                                                deferred = Q.defer();
                                                 self.debug.log("Loading " + type + " initialization: " + request.url);
                                                 self.debug.log(request);
                                                 setState.call(self, LOADING);
-                                                self.fragmentLoader.load(request).then(onBytesLoaded.bind(self, request), onBytesError.bind(self, request));
+                                                self.fragmentLoader.load(request).then(function(response){
+                                                    onBytesLoaded.call(self, request, response);
+                                                    deferred.resolve();
+                                                }, onBytesError.bind(self, request));
                                                 lastQuality = newQuality;
-                                            } else {
-                                                loadNextFragment.call(self, newQuality).then(onFragmentRequest.bind(self));
                                             }
+                                            Q.when(deferred ? deferred.promise : true).then(
+                                                function() {
+                                                    loadNextFragment.call(self, newQuality).then(onFragmentRequest.bind(self));
+                                            });
                                         }
                                     );
                                 } else {
@@ -650,11 +660,6 @@ MediaPlayer.dependencies.BufferController = function () {
         setMinBufferTime: function (value) {
             var self = this;
             minBufferTime = value;
-            if (self.requestScheduler.isScheduled(self)) {
-                self.debug.log("Changing " + type + " validate interval: " + self.requestScheduler.getExecuteInterval(self));
-                self.requestScheduler.stopScheduling(self);
-                self.requestScheduler.startScheduling(self, validate);
-            }
         },
 
         clearMetrics: function () {
