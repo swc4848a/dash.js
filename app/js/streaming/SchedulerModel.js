@@ -17,8 +17,7 @@ MediaPlayer.dependencies.SchedulerModel = function () {
 
     var context,
         scheduledTask,
-        lastExecuteTime,
-        executeId,
+        executeTime,
         isScheduled = false;
 
     return {
@@ -42,12 +41,12 @@ MediaPlayer.dependencies.SchedulerModel = function () {
             return scheduledTask;
         },
 
-        setLastExecuteTime: function(value) {
-            lastExecuteTime = value;
+        setExecuteTime: function(value) {
+            executeTime = value;
         },
 
-        getLastExecuteTime: function() {
-            return lastExecuteTime;
+        getExecuteTime: function() {
+            return executeTime;
         },
 
         setIsScheduled: function(value) {
@@ -60,14 +59,6 @@ MediaPlayer.dependencies.SchedulerModel = function () {
 
         getExecuteInterval: function () {
             return this.schedulerExt.getExecuteInterval(context);
-        },
-
-        setExecuteId: function(value) {
-            executeId = value;
-        },
-
-        getExecuteId: function () {
-            return executeId;
         }
     };
 };

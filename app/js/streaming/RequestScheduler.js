@@ -20,6 +20,7 @@
 
     var schedulerModels = [],
         isPeriodicListenerStarted = false,
+        EXECUTE_TIME_THRESHOLD = 0.1,
 
         /*
          * Calls the execution function only ones for provided date or time interval in milliseconds
@@ -29,41 +30,17 @@
          * @time The date or time interval the executeFunction must be called
          *
          */
-        scheduleOnce = function(executeContext, executeFunction, time) {
+        scheduleOnce = function(executeContext, executeFunction, dueTime) {
             if(!executeContext || !executeFunction) return;
 
-            var interval,
-                schedulerModel,
+            var schedulerModel,
                 scheduledTask;
-
-            // calculate interval for date
-            if (time instanceof Date) {
-                interval = new Date() - time;
-            } else if (typeof time === 'number') {
-            // use as is for number value
-                interval = time;
-            } else {
-            // we cannot use provided time value to continue
-                throw "incorrect time value";
-            }
 
             schedulerModel = registerSchedulerModel.call(this, executeContext);
             scheduledTask = createScheduledTask.call(this, schedulerModel, executeFunction, false);
             schedulerModel.setScheduledTask(scheduledTask);
-            schedulerModel.setIsScheduled(false);
-            executeTaskForTime(schedulerModel, interval);
-        },
-
-        /*
-         * Executes the scheduled task in provided interval
-         *
-         * @param schedulerModel
-         * @param interval
-         *
-         */
-        executeTaskForTime = function(schedulerModel, interval) {
-            var timeoutId = setTimeout(schedulerModel.getScheduledTask(), interval);
-            schedulerModel.setExecuteId(timeoutId);
+            schedulerModel.setIsScheduled(true);
+            schedulerModel.setExecuteTime(dueTime);
         },
 
         /*
@@ -76,7 +53,6 @@
             var schedulerModel = findSchedulerModel(executeContext);
 
             if (schedulerModel) {
-                clearTimeout(schedulerModel.getExecuteId());
                 unregisterSchedulerModel(schedulerModel);
             }
         },
@@ -105,7 +81,6 @@
             schedulerModel.setIsScheduled(true);
             startPeriodicScheduleListener.call(this);
             //TODO: for now we have to call executeFunction 'manually' for the first time before it can be called from event listener
-            schedulerModel.setLastExecuteTime(new Date());
             executeFunction.call(executeContext);
         },
 
@@ -159,17 +134,17 @@
          *
          */
         createScheduledTask = function(schedulerModel, executeFunction, isPeriodic) {
-            var scheduledTask = function() {
-                //TODO: probably we need some threshold for calling executeFunction
+            var videoModel = this.videoModel,
+                time,
+                scheduledTask = function() {
 
-                executeFunction.call(schedulerModel.getContext());
-
-                // remember the last execution time for period task or remove model for one-time tasks
                 if (isPeriodic) {
-                    var now = new Date();
-                    schedulerModel.setLastExecuteTime(now);
-                } else {
-                    unregisterSchedulerModel(schedulerModel);
+                    executeFunction.call(schedulerModel.getContext());
+                //TODO: Find the better way to detect the time match - getCurrentTime usually returns a float value that
+                // will very unlikely ever match the value of getExecuteTime. Using the threshold is unreliable because timeupdate
+                // interval can vary
+                } else if (Math.abs(videoModel.getCurrentTime() - schedulerModel.getExecuteTime()) < EXECUTE_TIME_THRESHOLD) {
+                    executeFunction.call(schedulerModel.getContext());
                 }
             };
 
@@ -185,10 +160,7 @@
 
             for (var i = 0; i < schedulerModels.length; i++) {
                 schedulerModel = schedulerModels[i];
-
-                if (schedulerModel.getIsScheduled()) {
-                    schedulerModel.getScheduledTask().call();
-                }
+                schedulerModel.getScheduledTask().call();
             }
         },
 
@@ -215,7 +187,6 @@
         stopScheduling = function(executeContext) {
             var schedulerModel = findSchedulerModel(executeContext);
             if (schedulerModel) {
-                schedulerModel.setIsScheduled(false);
                 unregisterSchedulerModel(schedulerModel);
                 if (schedulerModels.length === 0) {
                     stopPeriodicScheduleListener.call(this);
