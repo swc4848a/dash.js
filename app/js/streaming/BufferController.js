@@ -36,6 +36,7 @@ MediaPlayer.dependencies.BufferController = function () {
         fragmentRequests = [],
         periodIndex = -1,
         timestampOffset = 0,
+        fragmentsToLoad = 0,
 
         type,
         data,
@@ -160,6 +161,7 @@ MediaPlayer.dependencies.BufferController = function () {
             var self = this;
 
             self.debug.log(type + " Bytes finished loading: " + request.url);
+            requestNewFragment.call(self);
 
             self.fragmentController.process(response.data).then(
                 function (data) {
@@ -190,13 +192,11 @@ MediaPlayer.dependencies.BufferController = function () {
                                             self.debug.log("Buffered " + type + " Range: " + ranges.start(i) + " - " + ranges.end(i));
                                         }
                                     }
-                                    requestNewFragment.call(self);
                                 });
                             }
                         );
                     } else {
                         self.debug.log("No " + type + " bytes to push.");
-                        requestNewFragment.call(self);
                     }
                 }
             );
@@ -409,9 +409,52 @@ MediaPlayer.dependencies.BufferController = function () {
             return time;
         },
 
+        getRequiredFragmentCount = function(quality, currentBufferLength) {
+            var self =this,
+                playbackRate = self.videoModel.getPlaybackRate(),
+                deferred = Q.defer();
+                self.bufferExt.getRequiredBufferLength(currentBufferLength, self.requestScheduler.getExecuteInterval(self)/1000, playbackRate).then(
+                    function (requiredBufferLength) {
+                        self.indexHandler.getSegmentCountForDuration(quality, data, requiredBufferLength).then(
+                            function(count) {
+                                deferred.resolve(count);
+                            }
+                        )
+                    }
+                );
+
+            return deferred.promise;
+        },
+
         requestNewFragment = function() {
+            var self = this;
+
+            if (fragmentsToLoad > 0) {
+                fragmentsToLoad--;
+                loadNextFragment.call(self, lastQuality).then(onFragmentRequest.bind(self));
+            } else {
+                seeking = false;
+
+                if (state === VALIDATING) {
+                    setState.call(self, READY);
+                }
+
+                finishValidation.call(self);
+            }
+        },
+
+        validate = function () {
             var self = this,
+                newQuality,
+                representation = null,
+                now = new Date(),
+                currentVideoTime = self.videoModel.getCurrentTime(),
                 currentTime = getWorkingTime.call(self);
+
+            self.debug.log("BufferController.validate() " + type + " | state: " + state);
+            self.debug.log(type + " Playback rate: " + self.videoModel.getElement().playbackRate);
+            self.debug.log(type + " Working time: " + currentTime);
+            self.debug.log(type + " Video time: " + currentVideoTime);
 
             self.sourceBufferExt.getBufferLength(buffer, currentTime).then(
                 function (length) {
@@ -429,87 +472,54 @@ MediaPlayer.dependencies.BufferController = function () {
                             waitingForBuffer = true;
                             self.videoModel.stallStream(type, stalled);
                         }
-                    } else {
-                        self.bufferExt.shouldBufferMore(length, self.requestScheduler.getExecuteInterval(self) / 1000.0).then(
-                            function (shouldBuffer) {
-                                if (shouldBuffer) {
-                                    //self.debug.log("Buffer more " + type + ": " + shouldBuffer);
-                                    loadNextFragment.call(self, lastQuality).then(onFragmentRequest.bind(self));
-                                } else {
-                                    seeking = false;
-                                    if (state === VALIDATING) {
-                                        setState.call(self, READY);
-                                    } else {
-                                        finishValidation.call(self);
-                                    }
+                    } else if (state === READY) {
+                        setState.call(self, VALIDATING);
+                        self.abrController.getPlaybackQuality(type, data).then(
+                            function (quality) {
+                                self.debug.log(type + " Playback quality: " + quality);
+                                self.debug.log("Populate " + type + " buffers.");
+
+                                if (quality !== undefined) {
+                                    newQuality = quality;
                                 }
+
+                                qualityChanged = (quality !== lastQuality);
+
+                                if (qualityChanged === true) {
+                                    representation = getRepresentationForQuality(newQuality, self.getData());
+
+                                    if (representation === null || representation === undefined) {
+                                        throw "Unexpected error!";
+                                    }
+
+                                    clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.REPRESENTATION_SWITCH_STOP_REASON);
+                                    self.metricsModel.addRepresentationSwitch(type, now, currentVideoTime, representation.id);
+                                }
+
+                                self.debug.log(qualityChanged ? (type + " Quality changed to: " + quality) : "Quality didn't change.");
+                                return getRequiredFragmentCount.call(self, quality, length);
+                            }
+                        ).then(
+                            function (count) {
+                                fragmentsToLoad = count;
+                                loadInitialization.call(self, qualityChanged, newQuality).then(
+                                    function (request) {
+                                        if (request !== null) {
+                                            self.debug.log("Loading " + type + " initialization: " + request.url);
+                                            self.debug.log(request);
+                                            setState.call(self, LOADING);
+                                            self.fragmentLoader.load(request).then(onBytesLoaded.bind(self, request), onBytesError.bind(self, request));
+                                            lastQuality = newQuality;
+                                        } else {
+                                            requestNewFragment.call(self);
+                                        }
+                                    }
+                                );
                             }
                         );
                     }
                 }
             );
-        },
-
-        validate = function () {
-            var self = this,
-                newQuality,
-                representation = null,
-                now = new Date(),
-                currentVideoTime = self.videoModel.getCurrentTime();
-
-            self.debug.log("BufferController.validate() " + type + " | state: " + state);
-            self.debug.log(type + " Playback rate: " + self.videoModel.getElement().playbackRate);
-            self.debug.log(type + " Video time: " + currentVideoTime);
-
-            if (state === READY) {
-                setState.call(self, VALIDATING);
-                self.abrController.getPlaybackQuality(type, data).then(
-                    function (quality) {
-                        self.debug.log(type + " Playback quality: " + quality);
-                        self.debug.log("Populate " + type + " buffers.");
-
-                        if (quality !== undefined) {
-                            newQuality = quality;
-                        }
-
-                        qualityChanged = (quality !== lastQuality);
-
-                        if (qualityChanged === true) {
-                            representation = getRepresentationForQuality(newQuality, self.getData());
-
-                            if (representation === null || representation === undefined) {
-                                throw "Unexpected error!";
-                            }
-
-                            clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.REPRESENTATION_SWITCH_STOP_REASON);
-                            self.metricsModel.addRepresentationSwitch(type, now, currentVideoTime, representation.id);
-                        }
-
-                        self.debug.log(qualityChanged ? (type + " Quality changed to: " + quality) : "Quality didn't change.");
-                        return loadInitialization.call(self, qualityChanged, quality);
-                    }
-                ).then(
-                    function (request) {
-                        var deferred = null;
-                        if (request !== null) {
-                            deferred = Q.defer();
-                            self.debug.log("Loading " + type + " initialization: " + request.url);
-                            self.debug.log(request);
-                            setState.call(self, LOADING);
-                            self.fragmentLoader.load(request).then(function(response){
-                                onBytesLoaded.call(self, request, response);
-                                deferred.resolve();
-                            }, onBytesError.bind(self, request));
-                            lastQuality = newQuality;
-                        }
-                        Q.when(deferred ? deferred.promise : true).then(
-                            function() {
-                                setState.call(self, READY);
-                                requestNewFragment.call(self);
-                        });
-                    }
-                );
-            }
         };
 
     return {
