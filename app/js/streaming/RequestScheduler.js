@@ -20,7 +20,6 @@
 
     var schedulerModels = [],
         isPeriodicListenerStarted = false,
-        EXECUTE_TIME_THRESHOLD = 0.1,
 
         /*
          * Calls the execution function only ones for provided date or time interval in milliseconds
@@ -135,16 +134,13 @@
          */
         createScheduledTask = function(schedulerModel, executeFunction, isPeriodic) {
             var videoModel = this.videoModel,
-                time,
                 scheduledTask = function() {
 
                 if (isPeriodic) {
                     executeFunction.call(schedulerModel.getContext());
-                //TODO: Find the better way to detect the time match - getCurrentTime usually returns a float value that
-                // will very unlikely ever match the value of getExecuteTime. Using the threshold is unreliable because timeupdate
-                // interval can vary
-                } else if (Math.abs(videoModel.getCurrentTime() - schedulerModel.getExecuteTime()) < EXECUTE_TIME_THRESHOLD) {
+                } else if (Math.round(videoModel.getCurrentTime()) === schedulerModel.getExecuteTime()) {
                     executeFunction.call(schedulerModel.getContext());
+                    schedulerModel.setIsScheduled(false);
                 }
             };
 
@@ -160,7 +156,9 @@
 
             for (var i = 0; i < schedulerModels.length; i++) {
                 schedulerModel = schedulerModels[i];
-                schedulerModel.getScheduledTask().call();
+                if (schedulerModel.getIsScheduled()) {
+                    schedulerModel.getScheduledTask().call();
+                }
             }
         },
 
@@ -176,6 +174,7 @@
             isPeriodicListenerStarted = true;
             var element = this.videoModel.getElement();
             this.schedulerExt.attachScheduleListener(element, onScheduledTimeOccurred);
+            this.schedulerExt.attachUpdateScheduleListener(element, onUpdateSchedule);
         },
 
         /*
@@ -203,7 +202,21 @@
         stopPeriodicScheduleListener = function() {
             var element = this.videoModel.getElement();
             this.schedulerExt.detachScheduleListener(element, onScheduledTimeOccurred);
+            this.schedulerExt.detachUpdateScheduleListener(element, onUpdateSchedule);
             isPeriodicListenerStarted = false;
+        },
+
+        onUpdateSchedule = function() {
+            rescheduleTasks();
+        },
+
+        /*
+         * Sets all the SchedulerModels to scheduled state to be ready to be executed again
+         */
+        rescheduleTasks = function() {
+            for (var i = 0; i < schedulerModels.length; i++) {
+                schedulerModels[i].setIsScheduled(true);
+            }
         };
 
     return {
