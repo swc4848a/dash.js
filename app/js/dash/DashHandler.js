@@ -584,10 +584,14 @@ Dash.dependencies.DashHandler = function () {
             var representation = getRepresentationForQuality(quality, data),
                 deferred = Q.defer(),
                 segmentDuration,
-                segmentCount,
+                segmentCount = 0,
                 segment,
                 ft = 1,
                 fd;
+
+            if (requiredDuration <= 0) {
+                return Q.when(segmentCount);
+            };
 
             getSegments(representation).then(
                 function (segments) {
@@ -612,8 +616,8 @@ Dash.dependencies.DashHandler = function () {
                         fd = segment.duration;
                         segmentDuration = fd / ft;
                     }
-                    //TODO: Double check that we need to floor the result
-                    segmentCount = Math.floor((requiredDuration + (segmentDuration / 2)) / segmentDuration);
+
+                    segmentCount = Math.ceil((requiredDuration + (segmentDuration / 2)) / segmentDuration);
                     deferred.resolve(segmentCount);
                 }
             );
