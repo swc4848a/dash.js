@@ -91,6 +91,7 @@ MediaPlayer.dependencies.BufferController = function () {
             setState.call(self, READY);
 
             self.requestScheduler.startScheduling(self, validate);
+            self.fragmentController.attachBufferController(self, requestNewFragment);
         },
 
         doStart = function () {
@@ -131,6 +132,7 @@ MediaPlayer.dependencies.BufferController = function () {
             this.debug.log("BufferController " + type + " stop.");
             setState.call(this, WAITING);
             this.requestScheduler.stopScheduling(this);
+            this.fragmentController.detachBufferController(this);
 
             started = false;
             waitingForBuffer = false;
@@ -161,7 +163,7 @@ MediaPlayer.dependencies.BufferController = function () {
             var self = this;
 
             self.debug.log(type + " Bytes finished loading: " + request.url);
-            requestNewFragment.call(self);
+            self.fragmentController.setLoadingStateForBufferController(self, false);
 
             self.fragmentController.process(response.data).then(
                 function (data) {
@@ -431,6 +433,11 @@ MediaPlayer.dependencies.BufferController = function () {
 
             if (fragmentsToLoad > 0) {
                 fragmentsToLoad--;
+                //TODO: Sometimes the buffer controller state changes before all the buffer controllers get the notification about the previous state change
+                // setTimeout is a temporary fix for this issue
+                setTimeout(function() {
+                    self.fragmentController.setLoadingStateForBufferController(self, true);
+                }, 0);
                 loadNextFragment.call(self, lastQuality).then(onFragmentRequest.bind(self));
             } else {
                 seeking = false;
@@ -529,7 +536,6 @@ MediaPlayer.dependencies.BufferController = function () {
         manifestModel: undefined,
         bufferExt: undefined,
         sourceBufferExt: undefined,
-        fragmentController: undefined,
         abrController: undefined,
         fragmentExt: undefined,
         fragmentLoader: undefined,
@@ -538,7 +544,7 @@ MediaPlayer.dependencies.BufferController = function () {
         system: undefined,
         errHandler: undefined,
 
-        initialize: function (type, periodIndex, data, buffer, minBufferTime, videoModel, scheduler) {
+        initialize: function (type, periodIndex, data, buffer, minBufferTime, videoModel, scheduler, fragmentController) {
             var self = this;
 
             self.setVideoModel(videoModel);
@@ -548,6 +554,7 @@ MediaPlayer.dependencies.BufferController = function () {
             self.setBuffer(buffer);
             self.setScheduler(scheduler);
             self.setMinBufferTime(minBufferTime);
+            self.setFragmentController(fragmentController);
 
             self.manifestExt.getIsDynamic(self.manifestModel.getValue()).then(
                 function (isDynamic) {
@@ -611,6 +618,14 @@ MediaPlayer.dependencies.BufferController = function () {
 
         setScheduler: function (value) {
             this.requestScheduler = value;
+        },
+
+        getFragmentController: function () {
+            return this.fragmentController;
+        },
+
+        setFragmentController: function (value) {
+            this.fragmentController = value;
         },
 
         getTimestampOffset: function() {

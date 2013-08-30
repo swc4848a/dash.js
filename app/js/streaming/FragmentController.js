@@ -13,20 +13,90 @@
  */
 MediaPlayer.dependencies.FragmentController = function () {
     "use strict";
+
+    var fragmentModels = [],
+
+        notify = function() {
+            var ln = fragmentModels.length,
+                model;
+            // Execute the callback for each stored model
+            for (var i = 0; i < ln; i++) {
+                model = fragmentModels[i];
+                model.getUpdateCallback().call(model.getContext());
+            }
+        },
+
+        findModel = function(bufferController) {
+            for (var i = 0; i < fragmentModels.length; i++) {
+                if (fragmentModels[i].getContext() == bufferController) {
+                    return fragmentModels[i];
+                }
+            }
+
+            return null;
+        };
+
+    return {
+        system: undefined,
+        debug: undefined,
+
+        process: function (bytes) {
+            var result = null;
+
+            if (bytes !== null && bytes !== undefined && bytes.byteLength > 0) {
+                result = new Uint8Array(bytes);
+            }
+
+            return Q.when(result);
+        },
+
+        attachBufferController: function(bufferController, updateCallback) {
+            if(!bufferController) return null;
+            // Wrap the buffer controller into model and store it to track the loading state and notify about state changes
+            var model = this.system.getObject("fragmentModel");
+            model.setContext(bufferController);
+            model.setUpdateCallback(updateCallback);
+            fragmentModels.push(model);
+            return model;
+        },
+
+        detachBufferController: function(bufferController) {
+            var idx = fragmentModels.indexOf(bufferController);
+            // If we have the model for the given buffer just remove it from array
+            if (idx > -1) {
+                fragmentModels.splice(idx, 1);
+            }
+        },
+
+        isActiveRequestsCompleted: function() {
+            var isCompleted = true,
+                ln = fragmentModels.length;
+
+            // Search through all buffer controllers and look if any of them is still loading the current fragment
+            for (var i = 0; i < ln; i++) {
+                if (fragmentModels[i].getIsLoading()) {
+                    isCompleted = false;
+                    break;
+                }
+            }
+
+            return isCompleted;
+        },
+
+        setLoadingStateForBufferController: function(bufferController, isLoading) {
+            var fragmentModel = findModel(bufferController);
+
+            if (fragmentModel) {
+                fragmentModel.setIsLoading(isLoading);
+                // If all the buffer controllers have completed loading the current fragment notify them all
+                if (this.isActiveRequestsCompleted()) {
+                    notify();
+                }
+            }
+        }
+    }
 };
 
 MediaPlayer.dependencies.FragmentController.prototype = {
-    constructor: MediaPlayer.dependencies.FragmentController,
-
-    process: function (bytes) {
-        "use strict";
-
-        var result = null;
-
-        if (bytes !== null && bytes !== undefined && bytes.byteLength > 0) {
-            result = new Uint8Array(bytes);
-        }
-
-        return Q.when(result);
-    }
+    constructor: MediaPlayer.dependencies.FragmentController
 };
