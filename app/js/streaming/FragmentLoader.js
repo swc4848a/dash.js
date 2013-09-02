@@ -14,124 +14,106 @@
 MediaPlayer.dependencies.FragmentLoader = function () {
     "use strict";
 
-    var requests = [],
-        lastRequest = null,
-        loading = false,
-
-        loadNext = function () {
+    var loadNext = function (request) {
             var req = new XMLHttpRequest(),
                 httpRequestMetrics = null,
                 firstProgress = true,
                 loaded = false,
                 self = this;
 
-            if (requests.length > 0) {
-                lastRequest = requests.shift();
-                lastRequest.requestStartDate = new Date();
-                lastRequest.firstByteDate = lastRequest.requestStartDate;
-                loading = true;
+            request.requestStartDate = new Date();
+            request.firstByteDate = request.requestStartDate;
 
-                req.open("GET", lastRequest.url, true);
-                req.responseType = "arraybuffer";
+            req.open("GET", request.url, true);
+            req.responseType = "arraybuffer";
 /*
-                req.setRequestHeader("Cache-Control", "no-cache");
-                req.setRequestHeader("Pragma", "no-cache");
-                req.setRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT");
+            req.setRequestHeader("Cache-Control", "no-cache");
+            req.setRequestHeader("Pragma", "no-cache");
+            req.setRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT");
 */
-                if (lastRequest.range) {
-                    req.setRequestHeader("Range", "bytes=" + lastRequest.range);
-                }
-
-                req.onprogress = function (event) {
-                    if (firstProgress) {
-                        firstProgress = false;
-                        if (!event.lengthComputable || (event.lengthComputable && event.total != event.loaded)) {
-                            lastRequest.firstByteDate = new Date();
-                        }
-                    }
-                };
-
-                req.onload = function () {
-                    if (req.status < 200 || req.status > 299)
-                    {
-                      return;
-                    }
-                    loaded = true;
-                    lastRequest.requestEndDate = new Date();
-
-                    var currentTime = lastRequest.requestEndDate,
-                        bytes = req.response,
-                        latency = (lastRequest.firstByteDate.getTime() - lastRequest.requestStartDate.getTime()),
-                        download = (lastRequest.requestEndDate.getTime() - lastRequest.firstByteDate.getTime()),
-                        total = (lastRequest.requestEndDate.getTime() - lastRequest.requestStartDate.getTime());
-
-                    self.debug.log("segment loaded: (" + req.status + ", " + latency + "ms, " + download + "ms, " + total + "ms) " + lastRequest.url);
-
-                    httpRequestMetrics = self.metricsModel.addHttpRequest(lastRequest.streamType,
-                                                                          null,
-                                                                          lastRequest.type,
-                                                                          lastRequest.url,
-                                                                          null,
-                                                                          lastRequest.range,
-                                                                          lastRequest.requestStartDate,
-                                                                          lastRequest.firstByteDate,
-                                                                          lastRequest.requestEndDate,
-                                                                          req.status,
-                                                                          null,
-                                                                          lastRequest.duration);
-
-                    self.metricsModel.appendHttpTrace(httpRequestMetrics,
-                                                      currentTime,
-                                                      new Date().getTime() - currentTime.getTime(),
-                                                      [bytes.byteLength]);
-
-                    lastRequest.deferred.resolve({
-                        data: bytes,
-                        request: lastRequest
-                    });
-
-                    lastRequest.deferred = null;
-                    lastRequest = null;
-                    req = null;
-
-                    loadNext.call(self);
-                };
-
-                req.onloadend = req.onerror = function () {
-                    if (loaded)
-                    {
-                      return;
-                    }
-
-                    lastRequest.requestEndDate = new Date();
-
-                    var latency = (lastRequest.firstByteDate.getTime() - lastRequest.requestStartDate.getTime()),
-                        download = (lastRequest.requestEndDate.getTime() - lastRequest.firstByteDate.getTime()),
-                        total = (lastRequest.requestEndDate.getTime() - lastRequest.requestStartDate.getTime());
-
-                    self.debug.log("segment loaded: (" + req.status + ", " + latency + "ms, " + download + "ms, " + total + "ms) " + lastRequest.url);
-
-                    httpRequestMetrics = self.metricsModel.addHttpRequest(lastRequest.streamType,
-                                                                          null,
-                                                                          lastRequest.type,
-                                                                          lastRequest.url,
-                                                                          null,
-                                                                          lastRequest.range,
-                                                                          lastRequest.requestStartDate,
-                                                                          lastRequest.firstByteDate,
-                                                                          lastRequest.requestEndDate,
-                                                                          req.status,
-                                                                          null,
-                                                                          lastRequest.duration);
-                    lastRequest.deferred.reject("Error loading fragment.");
-
-                    loadNext.call(self);
-                };
-
-                req.send();
-            } else {
-                loading = false;
+            if (request.range) {
+                req.setRequestHeader("Range", "bytes=" + request.range);
             }
+
+            req.onprogress = function (event) {
+                if (firstProgress) {
+                    firstProgress = false;
+                    if (!event.lengthComputable || (event.lengthComputable && event.total != event.loaded)) {
+                        request.firstByteDate = new Date();
+                    }
+                }
+            };
+
+            req.onload = function () {
+                if (req.status < 200 || req.status > 299)
+                {
+                  return;
+                }
+                loaded = true;
+                request.requestEndDate = new Date();
+
+                var currentTime = request.requestEndDate,
+                    bytes = req.response,
+                    latency = (request.firstByteDate.getTime() - request.requestStartDate.getTime()),
+                    download = (request.requestEndDate.getTime() - request.firstByteDate.getTime()),
+                    total = (request.requestEndDate.getTime() - request.requestStartDate.getTime());
+
+                self.debug.log("segment loaded: (" + req.status + ", " + latency + "ms, " + download + "ms, " + total + "ms) " + request.url);
+
+                httpRequestMetrics = self.metricsModel.addHttpRequest(request.streamType,
+                                                                      null,
+                                                                      request.type,
+                                                                      request.url,
+                                                                      null,
+                                                                      request.range,
+                                                                      request.requestStartDate,
+                                                                      request.firstByteDate,
+                                                                      request.requestEndDate,
+                                                                      req.status,
+                                                                      null,
+                                                                      request.duration);
+
+                self.metricsModel.appendHttpTrace(httpRequestMetrics,
+                                                  currentTime,
+                                                  new Date().getTime() - currentTime.getTime(),
+                                                  [bytes.byteLength]);
+
+                request.deferred.resolve({
+                    data: bytes,
+                    request: request
+                });
+            };
+
+            req.onloadend = req.onerror = function () {
+                if (loaded)
+                {
+                  return;
+                }
+                
+                request.requestEndDate = new Date();
+
+                var latency = (request.firstByteDate.getTime() - request.requestStartDate.getTime()),
+                    download = (request.requestEndDate.getTime() - request.firstByteDate.getTime()),
+                    total = (request.requestEndDate.getTime() - request.requestStartDate.getTime());
+
+                self.debug.log("segment loaded: (" + req.status + ", " + latency + "ms, " + download + "ms, " + total + "ms) " + request.url);
+
+                httpRequestMetrics = self.metricsModel.addHttpRequest(request.streamType,
+                                                                      null,
+                                                                      request.type,
+                                                                      request.url,
+                                                                      null,
+                                                                      request.range,
+                                                                      request.requestStartDate,
+                                                                      request.firstByteDate,
+                                                                      request.requestEndDate,
+                                                                      req.status,
+                                                                      null,
+                                                                      request.duration);
+                request.deferred.reject("Error loading fragment.");
+            };
+
+            req.send();
         },
 
         loadRequest = function (req) {
@@ -139,11 +121,7 @@ MediaPlayer.dependencies.FragmentLoader = function () {
 
             req.deferred = deferred;
 
-            requests.push(req);
-
-            if (!loading) {
-                loadNext.call(this);
-            }
+            loadNext.call(this, req);
 
             return deferred.promise;
         };
@@ -151,10 +129,6 @@ MediaPlayer.dependencies.FragmentLoader = function () {
     return {
         metricsModel: undefined,
         debug: undefined,
-
-        getLoading: function () {
-            return loading;
-        },
 
         load: function (req) {
             var promise = null;
