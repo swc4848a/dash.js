@@ -39,6 +39,7 @@ MediaPlayer.dependencies.FragmentController = function () {
     return {
         system: undefined,
         debug: undefined,
+        fragmentLoader: undefined,
 
         process: function (bytes) {
             var result = null;
@@ -93,8 +94,64 @@ MediaPlayer.dependencies.FragmentController = function () {
                     notify();
                 }
             }
+        },
+
+        isFragmentLoaded: function(bufferController, request) {
+            var self = this,
+                isLoaded = false,
+                fragmentModel = findModel(bufferController),
+                requests = fragmentModel ? fragmentModel.getRequests() : null,
+                ln = requests ? requests.length : null,
+                req,
+                i;
+
+            if (!fragmentModel || !requests || !ln) {
+                return isLoaded;
+            }
+
+            for (i = 0; i < ln; i++) {
+                req = requests[i];
+                if (req.startTime === request.startTime) {
+                    self.debug.log(request.streamType + " Fragment already loaded for time: " + request.startTime);
+                    if (req.url === request.url) {
+                        self.debug.log(request.streamType + " Fragment url already loaded: " + request.url);
+                        isLoaded = true;
+                        break;
+                    } else {
+                        fragmentModel.removeRequest(request);
+                    }
+                }
+            }
+
+
+            return isLoaded;
+        },
+
+        executeRequest: function (bufferController, request, successCallback, errorCallback, streamEndCallback) {
+            var self = this,
+                fragmentModel = findModel(bufferController);
+
+            if (!fragmentModel || !request) {
+                return;
+            }
+
+            if (request.type.toLowerCase() !== "initialization segment") {
+                fragmentModel.addRequest(request);
+            }
+
+            switch (request.action) {
+                case "complete":
+                    streamEndCallback.call(fragmentModel.getContext());
+                    break;
+                case "download":
+                    self.fragmentLoader.load(request).then(successCallback.bind(fragmentModel.getContext(), request),
+                        errorCallback.bind(fragmentModel.getContext(), request));
+                    break;
+                default:
+                    self.debug.log("Unknown request action.");
+            }
         }
-    }
+    };
 };
 
 MediaPlayer.dependencies.FragmentController.prototype = {

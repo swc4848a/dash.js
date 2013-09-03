@@ -33,7 +33,6 @@ MediaPlayer.dependencies.BufferController = function () {
         stalled = false,
         liveOffset = 0,
         deferredAppend = null,
-        fragmentRequests = [],
         periodIndex = -1,
         timestampOffset = 0,
         fragmentsToLoad = 0,
@@ -207,18 +206,6 @@ MediaPlayer.dependencies.BufferController = function () {
         onBytesError = function (request) {
             var self = this;
 
-            // remove the failed request from the list
-            /*
-            for (var i = fragmentRequests.length - 1; i >= 0 ; --i) {
-                if (fragmentRequests[i].startTime === request.startTime) {
-                    if (fragmentRequests[i].url === request.url) {
-                        fragmentRequests.splice(i, 1);
-                    }
-                    break;
-                }
-            }
-            */
-
             if (state === LOADING) {
                 setState.call(self, READY);
             }
@@ -228,6 +215,8 @@ MediaPlayer.dependencies.BufferController = function () {
         },
 
         signalStreamComplete = function () {
+            this.debug.log(type + " Stream is complete.");
+            clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.END_OF_CONTENT_STOP_REASON);
             doStop.call(this);
         },
 
@@ -293,37 +282,13 @@ MediaPlayer.dependencies.BufferController = function () {
             var self = this;
 
             if (request !== null) {
-                switch (request.action) {
-                    case "complete":
-                        self.debug.log(type + " Stream is complete.");
-                        clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.END_OF_CONTENT_STOP_REASON);
-                        signalStreamComplete.call(self);
-                        break;
-                    case "download":
-                        for (var i = fragmentRequests.length - 1; i >= 0 ; --i) {
-                            if (fragmentRequests[i].startTime === request.startTime) {
-                                self.debug.log(type + " Fragment already loaded for time: " + request.startTime);
-                                if (fragmentRequests[i].url === request.url) {
-                                    self.debug.log(type + " Fragment url already loaded: " + request.url);
-                                    self.indexHandler.getNextSegmentRequest(lastQuality, data).then(onFragmentRequest.bind(self));
-                                    return;
-                                } else {
-                                    // remove overlapping segement of a different quality
-                                    fragmentRequests.splice(i, 1);
-                                }
-                                break;
-                            }
-                        }
-                        fragmentRequests.push(request);
-                        self.debug.log("Loading an " + type + " fragment: " + request.url);
-                        setState.call(self, LOADING);
-                        self.fragmentLoader.load(request).then(onBytesLoaded.bind(self, request), onBytesError.bind(self, request));
-                        break;
-                    default:
-                        self.debug.log("Unknown request action.");
+                if (self.fragmentController.isFragmentLoaded(self, request)) {
+                    self.indexHandler.getNextSegmentRequest(lastQuality, data).then(onFragmentRequest.bind(self));
+                } else {
+                    self.debug.log("Loading an " + type + " fragment: " + request.url);
+                    setState.call(self, LOADING);
+                    self.fragmentController.executeRequest(self, request, onBytesLoaded, onBytesError, signalStreamComplete);
                 }
-
-                request = null;
             }
 
             if (state === VALIDATING) {
@@ -515,7 +480,7 @@ MediaPlayer.dependencies.BufferController = function () {
                                             self.debug.log("Loading " + type + " initialization: " + request.url);
                                             self.debug.log(request);
                                             setState.call(self, LOADING);
-                                            self.fragmentLoader.load(request).then(onBytesLoaded.bind(self, request), onBytesError.bind(self, request));
+                                            self.fragmentController.executeRequest(self, request, onBytesLoaded, onBytesError, signalStreamComplete);
                                             lastQuality = newQuality;
                                         } else {
                                             requestNewFragment.call(self);
@@ -538,7 +503,6 @@ MediaPlayer.dependencies.BufferController = function () {
         sourceBufferExt: undefined,
         abrController: undefined,
         fragmentExt: undefined,
-        fragmentLoader: undefined,
         indexHandler: undefined,
         debug: undefined,
         system: undefined,

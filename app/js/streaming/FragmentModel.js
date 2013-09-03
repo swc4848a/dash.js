@@ -17,6 +17,7 @@ MediaPlayer.dependencies.FragmentModel = function () {
 
     var context,
         updateCallback,
+        loadedRequests = [],
         isLoading = false;
 
     return {
@@ -45,6 +46,22 @@ MediaPlayer.dependencies.FragmentModel = function () {
 
         getUpdateCallback: function() {
             return updateCallback;
+        },
+
+        addRequest: function(value) {
+            loadedRequests.push(value);
+        },
+
+        removeRequest: function(value) {
+            var idx = loadedRequests.indexOf(value);
+
+            if (idx !== -1) {
+                loadedRequests.splice(idx, 1);
+            }
+        },
+
+        getRequests: function() {
+            return loadedRequests;
         }
     };
 };
