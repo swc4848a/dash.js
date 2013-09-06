@@ -16,30 +16,42 @@ MediaPlayer.dependencies.FragmentController = function () {
 
     var fragmentModels = [],
 
-        notify = function() {
-            var ln = fragmentModels.length,
-                model;
-            // Execute the callback for each stored model
-            for (var i = 0; i < ln; i++) {
-                model = fragmentModels[i];
-                model.getUpdateCallback().call(model.getContext());
-            }
-        },
-
         findModel = function(bufferController) {
-            for (var i = 0; i < fragmentModels.length; i++) {
+            var ln = fragmentModels.length;
+            // We expect one-to-one relation between FragmentModel and BufferController,
+            // so just compare the given BufferController object with the one that stored in the model to find the model for it
+            for (var i = 0; i < ln; i++) {
                 if (fragmentModels[i].getContext() == bufferController) {
                     return fragmentModels[i];
                 }
             }
 
             return null;
+        },
+
+        isReadyToLoadNextFragment = function() {
+            var isReady = true,
+                ln = fragmentModels.length;
+            // Loop through the models and check if all of them are in the ready state
+            for (var i = 0; i < ln; i++) {
+                if (!fragmentModels[i].isReady()) {
+                    isReady = false;
+                    break;
+                }
+            }
+
+            return isReady;
+        },
+
+        executeRequests = function() {
+            for (var i = 0; i < fragmentModels.length; i++) {
+                fragmentModels[i].executeCurrentRequest();
+            }
         };
 
     return {
         system: undefined,
         debug: undefined,
-        fragmentLoader: undefined,
 
         process: function (bytes) {
             var result = null;
@@ -51,13 +63,13 @@ MediaPlayer.dependencies.FragmentController = function () {
             return Q.when(result);
         },
 
-        attachBufferController: function(bufferController, updateCallback) {
-            if(!bufferController) return null;
-            // Wrap the buffer controller into model and store it to track the loading state and notify about state changes
+        attachBufferController: function(bufferController) {
+            if (!bufferController) return null;
+            // Wrap the buffer controller into model and store it to track the loading state and execute the requests
             var model = this.system.getObject("fragmentModel");
             model.setContext(bufferController);
-            model.setUpdateCallback(updateCallback);
             fragmentModels.push(model);
+
             return model;
         },
 
@@ -69,87 +81,37 @@ MediaPlayer.dependencies.FragmentController = function () {
             }
         },
 
-        isActiveRequestsCompleted: function() {
-            var isCompleted = true,
-                ln = fragmentModels.length;
-
-            // Search through all buffer controllers and look if any of them is still loading the current fragment
-            for (var i = 0; i < ln; i++) {
-                if (fragmentModels[i].getIsLoading()) {
-                    isCompleted = false;
-                    break;
-                }
-            }
-
-            return isCompleted;
-        },
-
-        setLoadingStateForBufferController: function(bufferController, isLoading) {
-            var fragmentModel = findModel(bufferController);
-
-            if (fragmentModel) {
-                fragmentModel.setIsLoading(isLoading);
-                // If all the buffer controllers have completed loading the current fragment notify them all
-                if (this.isActiveRequestsCompleted()) {
-                    notify();
-                }
+        onBufferControllerStateChange: function() {
+            // Check if we are ready to execute pending requests and do it
+            if (isReadyToLoadNextFragment()) {
+                executeRequests.call(this);
             }
         },
 
         isFragmentLoaded: function(bufferController, request) {
-            var self = this,
-                isLoaded = false,
-                fragmentModel = findModel(bufferController),
-                requests = fragmentModel ? fragmentModel.getRequests() : null,
-                ln = requests ? requests.length : null,
-                req,
-                i;
+            var fragmentModel = findModel(bufferController),
+                isLoaded;
 
-            if (!fragmentModel || !requests || !ln) {
-                return isLoaded;
+            if (!fragmentModel) {
+                return false;
             }
 
-            for (i = 0; i < ln; i++) {
-                req = requests[i];
-                if (req.startTime === request.startTime) {
-                    self.debug.log(request.streamType + " Fragment already loaded for time: " + request.startTime);
-                    if (req.url === request.url) {
-                        self.debug.log(request.streamType + " Fragment url already loaded: " + request.url);
-                        isLoaded = true;
-                        break;
-                    } else {
-                        fragmentModel.removeRequest(request);
-                    }
-                }
-            }
-
+            isLoaded = fragmentModel.isFragmentLoaded(request);
 
             return isLoaded;
         },
 
-        executeRequest: function (bufferController, request, successCallback, errorCallback, streamEndCallback) {
-            var self = this,
-                fragmentModel = findModel(bufferController);
+        prepareFragmentForLoading: function(bufferController, request, startLoadingCallback, successLoadingCallback, errorLoadingCallback, streamEndCallback) {
+            var fragmentModel = findModel(bufferController);
 
             if (!fragmentModel || !request) {
                 return;
             }
+            // Store the request and all the necessary callbacks in the model for deferred execution
+            fragmentModel.setCurrentRequest(request);
+            fragmentModel.setCallbacks(startLoadingCallback, successLoadingCallback, errorLoadingCallback, streamEndCallback);
 
-            if (request.type.toLowerCase() !== "initialization segment") {
-                fragmentModel.addRequest(request);
-            }
-
-            switch (request.action) {
-                case "complete":
-                    streamEndCallback.call(fragmentModel.getContext());
-                    break;
-                case "download":
-                    self.fragmentLoader.load(request).then(successCallback.bind(fragmentModel.getContext(), request),
-                        errorCallback.bind(fragmentModel.getContext(), request));
-                    break;
-                default:
-                    self.debug.log("Unknown request action.");
-            }
+            return Q.when(true);
         }
     };
 };

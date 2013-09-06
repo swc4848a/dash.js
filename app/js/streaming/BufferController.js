@@ -50,6 +50,8 @@ MediaPlayer.dependencies.BufferController = function () {
             var self = this;
             self.debug.log("BufferController " + type + " setState to:" + value);
             state = value;
+            // Notify the FragmentController about any state change to track the loading process of each active BufferController
+            self.fragmentController.onBufferControllerStateChange();
         },
 
         clearPlayListTraceMetrics = function (endTime, stopreason) {
@@ -90,7 +92,7 @@ MediaPlayer.dependencies.BufferController = function () {
             setState.call(self, READY);
 
             self.requestScheduler.startScheduling(self, validate);
-            self.fragmentController.attachBufferController(self, requestNewFragment);
+            self.fragmentController.attachBufferController(self);
         },
 
         doStart = function () {
@@ -158,11 +160,16 @@ MediaPlayer.dependencies.BufferController = function () {
             }
         },
 
+        onBytesLoadingStart = function() {
+            setState.call(this, LOADING);
+        },
+
         onBytesLoaded = function (request, response) {
             var self = this;
 
             self.debug.log(type + " Bytes finished loading: " + request.url);
-            self.fragmentController.setLoadingStateForBufferController(self, false);
+            // We have gotten the fragment, now we are ready to get the next one
+            requestNewFragment.call(self);
 
             self.fragmentController.process(response.data).then(
                 function (data) {
@@ -282,17 +289,17 @@ MediaPlayer.dependencies.BufferController = function () {
             var self = this;
 
             if (request !== null) {
+                // If we have already loaded the given fragment ask for the next one. Otherwise prepare it to get loaded
                 if (self.fragmentController.isFragmentLoaded(self, request)) {
                     self.indexHandler.getNextSegmentRequest(lastQuality, data).then(onFragmentRequest.bind(self));
                 } else {
                     self.debug.log("Loading an " + type + " fragment: " + request.url);
-                    setState.call(self, LOADING);
-                    self.fragmentController.executeRequest(self, request, onBytesLoaded, onBytesError, signalStreamComplete);
+                    self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, signalStreamComplete).then(
+                        function() {
+                            setState.call(self, READY);
+                        }
+                    );
                 }
-            }
-
-            if (state === VALIDATING) {
-                setState.call(self, READY);
             }
         },
 
@@ -386,7 +393,7 @@ MediaPlayer.dependencies.BufferController = function () {
                             function(count) {
                                 deferred.resolve(count);
                             }
-                        )
+                        );
                     }
                 );
 
@@ -398,11 +405,6 @@ MediaPlayer.dependencies.BufferController = function () {
 
             if (fragmentsToLoad > 0) {
                 fragmentsToLoad--;
-                //TODO: Sometimes the buffer controller state changes before all the buffer controllers get the notification about the previous state change
-                // setTimeout is a temporary fix for this issue
-                setTimeout(function() {
-                    self.fragmentController.setLoadingStateForBufferController(self, true);
-                }, 0);
                 loadNextFragment.call(self, lastQuality).then(onFragmentRequest.bind(self));
             } else {
                 seeking = false;
@@ -479,8 +481,11 @@ MediaPlayer.dependencies.BufferController = function () {
                                         if (request !== null) {
                                             self.debug.log("Loading " + type + " initialization: " + request.url);
                                             self.debug.log(request);
-                                            setState.call(self, LOADING);
-                                            self.fragmentController.executeRequest(self, request, onBytesLoaded, onBytesError, signalStreamComplete);
+                                            self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, signalStreamComplete).then(
+                                                function() {
+                                                    setState.call(self, READY);
+                                                }
+                                            );
                                             lastQuality = newQuality;
                                         } else {
                                             requestNewFragment.call(self);
@@ -657,6 +662,10 @@ MediaPlayer.dependencies.BufferController = function () {
 
         setMinBufferTime: function (value) {
             minBufferTime = value;
+        },
+
+        isReady: function() {
+            return state === READY;
         },
 
         clearMetrics: function () {

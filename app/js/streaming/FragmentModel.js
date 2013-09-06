@@ -16,13 +16,25 @@ MediaPlayer.dependencies.FragmentModel = function () {
     "use strict";
 
     var context,
-        updateCallback,
-        loadedRequests = [],
-        isLoading = false;
+        executedRequests = [],
+        currentRequest,
+        startLoadingCallback,
+        successLoadingCallback,
+        errorLoadingCallback,
+        streamEndCallback,
+
+        removeExecutedRequest = function(request) {
+            var idx = executedRequests.indexOf(request);
+
+            if (idx !== -1) {
+                executedRequests.splice(idx, 1);
+            }
+        };
 
     return {
         system: undefined,
         debug: undefined,
+        fragmentLoader: undefined,
 
         setContext: function(value) {
             context = value;
@@ -32,36 +44,73 @@ MediaPlayer.dependencies.FragmentModel = function () {
             return context;
         },
 
-        setIsLoading: function(value) {
-            isLoading = value;
+        setCurrentRequest: function(value) {
+            currentRequest = value;
         },
 
-        getIsLoading: function() {
-            return isLoading;
+        setCallbacks: function(onLoadingStart, onLoadingSuccess, onLoadingError, onStreamEnd) {
+            startLoadingCallback = onLoadingStart;
+            streamEndCallback = onStreamEnd;
+
+            successLoadingCallback = function(request, response) {
+                if (currentRequest.type.toLowerCase() !== "initialization segment") {
+                    executedRequests.push(currentRequest);
+                }
+                currentRequest = null;
+                onLoadingSuccess.call(context, request, response);
+            };
+
+            errorLoadingCallback = function(response) {
+                currentRequest = null;
+                onLoadingError.call(context, response);
+            };
         },
 
-        setUpdateCallback: function(value) {
-            updateCallback = value;
-        },
+        isFragmentLoaded: function(request) {
+            var self = this,
+                isLoaded = false,
+                ln = executedRequests.length,
+                req;
 
-        getUpdateCallback: function() {
-            return updateCallback;
-        },
-
-        addRequest: function(value) {
-            loadedRequests.push(value);
-        },
-
-        removeRequest: function(value) {
-            var idx = loadedRequests.indexOf(value);
-
-            if (idx !== -1) {
-                loadedRequests.splice(idx, 1);
+            for (var i = 0; i < ln; i++) {
+                req = executedRequests[i];
+                if (request.startTime === req.startTime) {
+                    self.debug.log(request.streamType + " Fragment already loaded for time: " + request.startTime);
+                    if (request.url === req.url) {
+                        self.debug.log(request.streamType + " Fragment url already loaded: " + request.url);
+                        isLoaded = true;
+                        break;
+                    } else {
+                        // remove overlapping segement of a different quality
+                        removeExecutedRequest(request);
+                    }
+                }
             }
+
+            return isLoaded;
         },
 
-        getRequests: function() {
-            return loadedRequests;
+        isReady: function() {
+            return context.isReady();
+        },
+
+        executeCurrentRequest: function() {
+            if (!currentRequest) return;
+
+            switch (currentRequest.action) {
+                case "complete":
+                    // Stream has completed, execute the correspoinding callback
+                    streamEndCallback.call(context);
+                    break;
+                case "download":
+                    // We are about to start loading the fragment, so execute the corresponding callback
+                    startLoadingCallback.call(context);
+                    this.fragmentLoader.load(currentRequest).then(successLoadingCallback.bind(context, currentRequest),
+                        errorLoadingCallback.bind(context, currentRequest));
+                    break;
+                default:
+                    this.debug.log("Unknown request action.");
+            }
         }
     };
 };
