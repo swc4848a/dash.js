@@ -152,6 +152,10 @@
          *
          */
         onScheduledTimeOccurred = function() {
+            runScheduledTasks();
+        },
+
+        runScheduledTasks = function() {
             var schedulerModel;
 
             for (var i = 0; i < schedulerModels.length; i++) {
@@ -208,6 +212,7 @@
 
         onUpdateSchedule = function() {
             rescheduleTasks();
+            runScheduledTasks();
         },
 
         /*

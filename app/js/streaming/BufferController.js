@@ -152,7 +152,7 @@ MediaPlayer.dependencies.BufferController = function () {
         finishValidation = function () {
             var self = this;
             if (state === LOADING) {
-                if (stalled && !waitingForBuffer) {
+                if (stalled) {
                     stalled = false;
                     this.videoModel.stallStream(type, stalled);
                 }
