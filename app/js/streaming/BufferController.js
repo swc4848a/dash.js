@@ -300,6 +300,8 @@ MediaPlayer.dependencies.BufferController = function () {
                         }
                     );
                 }
+            } else {
+                setState.call(self, READY);
             }
         },
 
