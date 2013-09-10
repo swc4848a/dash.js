@@ -581,7 +581,8 @@ Dash.dependencies.DashHandler = function () {
         },
 
         getSegmentCountForDuration = function (quality, data, requiredDuration) {
-            var representation = getRepresentationForQuality(quality, data),
+            var self = this,
+                representation = getRepresentationForQuality(quality, data),
                 deferred = Q.defer(),
                 segmentDuration,
                 segmentCount = 0,
@@ -593,7 +594,7 @@ Dash.dependencies.DashHandler = function () {
                 return Q.when(segmentCount);
             };
 
-            getSegments(representation).then(
+            getSegments.call(self, representation).then(
                 function (segments) {
                     if (segments === null || segments === undefined) {
                         if (!representation.hasOwnProperty("SegmentTemplate")) {
