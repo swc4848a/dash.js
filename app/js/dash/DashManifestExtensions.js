@@ -714,8 +714,16 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             defer,
             idx;
 
-        for (idx = 0; idx < periodIndex; idx++) {
-            if (period.hasOwnProperty("BaseURL") && (periodArray[idx].BaseURL == period.BaseURL)) {
+        for (idx = 0; idx <= periodIndex; idx++) {
+            if (period === periodArray[idx]) {
+                defer = Q.defer();
+                self.getLiveStart(manifest, idx).then(
+                    function(liveStart) {
+                        time = liveStart;
+                        defer.resolve(time);
+                    }
+                )
+            } else if (period.hasOwnProperty("BaseURL") && (periodArray[idx].BaseURL == period.BaseURL)) {
                 defer = Q.defer();
                 Q.all([self.getLiveStart(manifest, idx), self.getLiveStart(manifest, periodIndex)]).then(
                     function (liveStartResults) {
