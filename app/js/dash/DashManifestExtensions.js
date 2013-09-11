@@ -419,7 +419,8 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             fTimescale = 1,
             representation,
             list = null,
-            template = null;
+            template = null
+            S0 = null;
 
         // We don't really care what representation we use; they should all start at the same time.
         // Just grab the first representation; if this isn't there, we have bigger problems.
@@ -451,8 +452,13 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
             if (template.hasOwnProperty("SegmentTimeline")) {
                 // This had better exist, or there's bigger problems.
-                // First one must have a time value!
-                time = (template.SegmentTimeline.S_asArray[0].t / fTimescale);
+                S0 = template.SegmentTimeline.S_asArray[0]
+                if (S0.hasOwnProperty("t")) {
+                    time = (S0.t / fTimescale);
+                }
+                else {
+                    time = 0;
+                }
             }
             else {
                 time = (((fStart - 1) * fDuration) / fTimescale);
