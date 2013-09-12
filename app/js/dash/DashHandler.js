@@ -592,7 +592,7 @@ Dash.dependencies.DashHandler = function () {
 
             if (requiredDuration <= 0) {
                 return Q.when(segmentCount);
-            };
+            }
 
             getSegments.call(self, representation).then(
                 function (segments) {

@@ -419,7 +419,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             fTimescale = 1,
             representation,
             list = null,
-            template = null
+            template = null,
             S0 = null;
 
         // We don't really care what representation we use; they should all start at the same time.
@@ -452,7 +452,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
             if (template.hasOwnProperty("SegmentTimeline")) {
                 // This had better exist, or there's bigger problems.
-                S0 = template.SegmentTimeline.S_asArray[0]
+                S0 = template.SegmentTimeline.S_asArray[0];
                 if (S0.hasOwnProperty("t")) {
                     time = (S0.t / fTimescale);
                 }
@@ -468,7 +468,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         return Q.when(time);
     },
 
-    getLiveEdge: function (manifest, periodIndex) {
+    getLiveEdge: function (manifest /*, periodIndex*/) {
         "use strict";
         var self = this,
             deferred = Q.defer(),
@@ -719,7 +719,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
                                 time += liveStart;
                                 defer.resolve(time);
                             }
-                        )
+                        );
                     } else if (period.hasOwnProperty("BaseURL") && (periodArray[idx].BaseURL == period.BaseURL)) {
                         Q.all([self.getLiveStart(manifest, idx), self.getLiveStart(manifest, periodIndex)]).then(
                             function (liveStartResults) {
