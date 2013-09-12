@@ -488,18 +488,9 @@ Dash.dependencies.DashManifestExtensions.prototype = {
                     liveOffset = ((now.getTime() - start.getTime()) / 1000);
                 }
 
-                // Find out the between stream start and available start time.
-                self.getLiveStart(manifest, periodIndex).then(
-                    function (start) {
-                        // get the full time, relative to stream start
-                        liveOffset += start;
-
-                        // peel off our reserved time
-                        liveOffset -= delay;
-
-                        deferred.resolve(liveOffset);
-                    }
-                );
+                // peel off our reserved time
+                liveOffset -= delay;
+                deferred.resolve(liveOffset);
             }
         );
 
@@ -717,33 +708,48 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             periodArray = manifest.Period_asArray,
             period = periodArray[periodIndex],
             time = 0,
-            defer,
-            idx;
+            defer = Q.defer(),
+            idx,
 
-        for (idx = 0; idx <= periodIndex; idx++) {
-            if (period === periodArray[idx]) {
-                defer = Q.defer();
-                self.getLiveStart(manifest, idx).then(
-                    function(liveStart) {
-                        time = liveStart;
-                        defer.resolve(time);
+            addLiveStartOffset = function() {
+                for (idx = 0; idx <= periodIndex; idx++) {
+                    if (period === periodArray[idx]) {
+                        self.getLiveStart(manifest, idx).then(
+                            function(liveStart) {
+                                time += liveStart;
+                                defer.resolve(time);
+                            }
+                        )
+                    } else if (period.hasOwnProperty("BaseURL") && (periodArray[idx].BaseURL == period.BaseURL)) {
+                        Q.all([self.getLiveStart(manifest, idx), self.getLiveStart(manifest, periodIndex)]).then(
+                            function (liveStartResults) {
+                                if (typeof(liveStartResults) !== "undefined" && !isNaN(liveStartResults[0] && !isNaN(liveStartResults[0]))) {
+                                    time += Math.abs(liveStartResults[0] - liveStartResults[1]);
+                                }
+
+                                defer.resolve(time);
+                            }
+                        );
+                        break;
                     }
-                )
-            } else if (period.hasOwnProperty("BaseURL") && (periodArray[idx].BaseURL == period.BaseURL)) {
-                defer = Q.defer();
-                Q.all([self.getLiveStart(manifest, idx), self.getLiveStart(manifest, periodIndex)]).then(
-                    function (liveStartResults) {
-                        if (typeof(liveStartResults) !== "undefined" && !isNaN(liveStartResults[0] && !isNaN(liveStartResults[0]))) {
-                            time = Math.abs(liveStartResults[0] - liveStartResults[1]);
+                }
+            };
+
+        self.getIsDynamic(manifest).then(
+            function(isDynamic){
+                if (isDynamic){
+                    self.getLiveEdge(manifest, idx).then(
+                        function(edge) {
+                            time -= edge;
+                            addLiveStartOffset();
                         }
-
-                        defer.resolve(time);
-                    }
-                );
-                break;
+                    );
+                } else {
+                    addLiveStartOffset();
+                }
             }
-        }
+        );
 
-        return Q.when(defer ? defer.promise : time);
+        return Q.when(defer.promise);
     }
 };
