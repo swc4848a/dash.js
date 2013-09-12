@@ -424,7 +424,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
         // We don't really care what representation we use; they should all start at the same time.
         // Just grab the first representation; if this isn't there, we have bigger problems.
-        representation = manifest.Period_asArray[periodIndex].AdaptationSet_asArray[1].Representation_asArray[0];
+        representation = manifest.Period_asArray[periodIndex].AdaptationSet_asArray[0].Representation_asArray[0];
 
         if (representation.hasOwnProperty("SegmentList")) {
             list = representation.SegmentList;
