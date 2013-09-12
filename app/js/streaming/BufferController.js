@@ -530,13 +530,14 @@ MediaPlayer.dependencies.BufferController = function () {
             self.manifestExt.getIsDynamic(self.manifestModel.getValue()).then(
                 function (isDynamic) {
                     self.indexHandler.setIsDynamic(isDynamic);
-                }
-            );
-
-            self.manifestExt.getTimestampOffsetForPeriod(periodIndex, self.manifestModel.getValue()).then(
-                function (offset) {
-                    self.getBuffer().timestampOffset = offset;
-                    timestampOffset = offset;
+                    self.manifestExt.getTimestampOffsetForPeriod(periodIndex, self.manifestModel.getValue()).then(
+                        function (offset) {
+                            if (isDynamic) {
+                                self.getBuffer().timestampOffset = offset;
+                            }
+                            timestampOffset = offset;
+                        }
+                    );
                 }
             );
 
