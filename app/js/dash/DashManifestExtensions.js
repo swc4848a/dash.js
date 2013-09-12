@@ -403,7 +403,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
     getLiveOffset: function (manifest) {
         "use strict";
-        var delay = 15;
+        var delay = 0;
 
         if (manifest.hasOwnProperty("suggestedPresentationDelay")) {
             delay = manifest.suggestedPresentationDelay;
@@ -674,7 +674,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             function (time) {
                 var startTime = manifest.Period_asArray[periodIndex].start;
                 if (typeof(startTime) !== "undefined") {
-                    return Q.when(manifest.Period_asArray[periodIndex].start - time);
+                    return Q.when(startTime - time);
                 } else {
                     var deferredDurations = [],
                         defferedOffset = Q.defer();
