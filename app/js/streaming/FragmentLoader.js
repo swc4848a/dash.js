@@ -96,7 +96,7 @@ MediaPlayer.dependencies.FragmentLoader = function () {
                     download = (request.requestEndDate.getTime() - request.firstByteDate.getTime()),
                     total = (request.requestEndDate.getTime() - request.requestStartDate.getTime());
 
-                self.debug.log("segment loaded: (" + req.status + ", " + latency + "ms, " + download + "ms, " + total + "ms) " + request.url);
+                self.debug.log("segment load failed: (" + req.status + ", " + latency + "ms, " + download + "ms, " + total + "ms) " + request.url);
 
                 httpRequestMetrics = self.metricsModel.addHttpRequest(request.streamType,
                                                                       null,
