@@ -45,15 +45,7 @@ Dash.dependencies.DashParser = function () {
                     return datetimeRegex.test(str);
                 },
                 converter: function (str) {
-                    var localDate = new Date(str);
-                    return new Date(Date.UTC(
-                        localDate.getFullYear(), 
-                        localDate.getMonth(), 
-                        localDate.getDate(), 
-                        localDate.getHours(), 
-                        localDate.getMinutes(), 
-                        localDate.getSeconds(), 
-                        localDate.getMilliseconds()));
+                    return new Date(str);
                 }
             },
             {
