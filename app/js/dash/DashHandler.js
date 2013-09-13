@@ -352,6 +352,8 @@ Dash.dependencies.DashHandler = function () {
             }
             */
 
+            console.log("---->> idx: " + idx + " time: " + time);
+
             return Q.when(idx);
         },
 
@@ -380,11 +382,9 @@ Dash.dependencies.DashHandler = function () {
             dur = (fDuration / fTimescale);
             idx = Math.floor(time / dur);
 
-            // For live streaming we have already counted startNumber offset in DashManifestExtensions.getLiveEdge()
-            if (!isDynamic) {
-                idx += startNumber; // apply first item offset
-            }
+            idx += startNumber; // apply first item offset
 
+            console.log("---->> idx: " + idx + " time: " + time);
             return Q.when(idx);
         },
 
