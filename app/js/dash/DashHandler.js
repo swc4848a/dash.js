@@ -635,6 +635,7 @@ Dash.dependencies.DashHandler = function () {
                 fs,
                 fd,
                 ft = 1,
+                startNumber = 1,
                 deferred = Q.defer();
 
             // get the last time again to be safe
@@ -655,6 +656,12 @@ Dash.dependencies.DashHandler = function () {
                         if (representation.SegmentTemplate.hasOwnProperty("timescale")) {
                             ft = representation.SegmentTemplate.timescale;
                         }
+
+                        if (representation.SegmentTemplate.hasOwnProperty("startNumber")) {
+                            startNumber = representation.SegmentTemplate.startNumber;
+                        }
+
+                        bufferedIndex -= startNumber;
 
                         time = (fd / ft) * (bufferedIndex); // + 1);
                     } else {
