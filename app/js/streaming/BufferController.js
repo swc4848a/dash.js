@@ -252,12 +252,15 @@ MediaPlayer.dependencies.BufferController = function () {
 
         loadNextFragment = function (quality) {
             var promise,
+            //TODO it seems that the buffer can contain some additional offset that is not taken into account when we set
+            // buffer.timestampOffset, se we have to subtract this offset in additon to timestamp offset and liveOffset,
+                bufferedStartOffset = buffer.buffered.length ? buffer.buffered.start(0) : 0,
                 self = this;
 
             if (dataChanged && !seeking) {
                 //time = self.videoModel.getCurrentTime();
                 self.debug.log("Data changed - loading the " + type + " fragment for time: " + playingTime);
-                promise = self.indexHandler.getSegmentRequestForTime(playingTime - timestampOffset - liveOffset, quality, data);
+                promise = self.indexHandler.getSegmentRequestForTime(playingTime - timestampOffset - liveOffset - bufferedStartOffset, quality, data);
             } else {
                 var deferred = Q.defer(),
                     segmentTime = self.videoModel.getCurrentTime();
@@ -271,7 +274,7 @@ MediaPlayer.dependencies.BufferController = function () {
                             segmentTime = range.end;
                         }
                         self.debug.log("Loading the " + type + " fragment for time: " + segmentTime);
-                        self.indexHandler.getSegmentRequestForTime(segmentTime - timestampOffset - liveOffset, quality, data).then(
+                        self.indexHandler.getSegmentRequestForTime(segmentTime - timestampOffset - liveOffset - bufferedStartOffset, quality, data).then(
                             function (request) {
                                 deferred.resolve(request);
                             }
