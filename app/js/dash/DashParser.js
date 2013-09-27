@@ -53,16 +53,16 @@ Dash.dependencies.DashParser = function () {
                     // as UTC or as a local time so we have to parse the string manually to normalize the given date value for
                     // all browsers
                     utcDate = Date.UTC(
-                        parseInt(match[1]),
-                        parseInt(match[2])-1, // months start from zero
-                        parseInt(match[3]),
-                        parseInt(match[4]),
-                        parseInt(match[5]),
-                        (match[6] && parseInt(match[6]) || 0),
+                        parseInt(match[1], 10),
+                        parseInt(match[2], 10)-1, // months start from zero
+                        parseInt(match[3], 10),
+                        parseInt(match[4], 10),
+                        parseInt(match[5], 10),
+                        (match[6] && parseInt(match[6], 10) || 0),
                         (match[7] && parseFloat(match[7]) * MILLISECONDS_IN_SECONDS) || 0);
                     // If the date has timezone offset take it into account as well
                     if (match[9] && match[10]) {
-                        var timezoneOffset = parseInt(match[9]) * MINUTES_IN_HOUR + parseInt(match[10]);
+                        var timezoneOffset = parseInt(match[9], 10) * MINUTES_IN_HOUR + parseInt(match[10], 10);
                         utcDate += (match[8] === '+' ? -1 : +1) * timezoneOffset * SECONDS_IN_MIN * MILLISECONDS_IN_SECONDS;
                     }
 

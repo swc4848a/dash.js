@@ -108,8 +108,8 @@
             }
 
             var lastRange = ranges.length -1,
-                bufferEndTime = ranges.end(lastRange) - activeStream.getTimestampOffset(),
-                remainingBufferDuration = activeStream.getDuration() - bufferEndTime;
+                bufferEndTime = ranges.end(lastRange),
+                remainingBufferDuration = (activeStream.getStartTime() + activeStream.getDuration()) - bufferEndTime;
 
             if (remainingBufferDuration < STREAM_BUFFER_END_THRESHOLD) {
                 activeStream.getVideoModel().unlisten("progress", progressHandler);
@@ -127,7 +127,7 @@
             // from beginning instead of from a chosen position. So we do nothing if the player is in the seeking state
             if (activeStream.getVideoModel().getElement().seeking) return;
 
-            var streamEndTime  = activeStream.getDuration() + activeStream.getTimestampOffset() + activeStream.getLiveOffset(),
+            var streamEndTime  = activeStream.getStartTime() + activeStream.getDuration(),
                 currentTime = activeStream.getVideoModel().getCurrentTime();
 
             // check if stream end is reached
@@ -166,9 +166,14 @@
 
         getStreamForTime = function(time) {
             var duration = 0,
-                stream = null;
+                stream = null,
+                ln = streams.length;
 
-            for (var i = 0, ln = streams.length; i < ln; i++) {
+            if (ln > 0) {
+                duration += streams[0].getStartTime();
+            }
+
+            for (var i = 0; i < ln; i++) {
                 stream = streams[i];
                 duration += stream.getDuration();
 
@@ -253,14 +258,15 @@
 
             self.manifestLoader.load(url).then(
                 function(manifest) {
-                    self.manifestExt.getPeriodCount(manifest).then(
-                        function(length) {
-                            for (var i = 0; i < length; i++) {
+                    self.manifestModel.setValue(manifest);
+                    self.manifestExt.getRegularPeriods(manifest).then(
+                        function(periods) {
+                            for (var i = 0, len = periods.length; i < len; i++) {
                                 stream = self.system.getObject("stream");
                                 stream.setVideoModel(i === 0 ? self.videoModel : createVideoModel.call(self));
                                 stream.initProtection();
                                 stream.setAutoPlay(autoPlay);
-                                stream.load(manifest, i);
+                                stream.load(manifest, periods[i]);
                                 streams.push(stream);
                             }
 

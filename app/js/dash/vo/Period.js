@@ -11,32 +11,14 @@
  * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-Dash.vo.Segment = function () {
+Dash.vo.Period = function () {
     "use strict";
-    this.indexRange = null;
-    this.index = null;
-    this.mediaRange = null;
-    this.media = null;
+    this.id = null;
+    this.index = -1;
     this.duration = NaN;
-    this.timescale = NaN;
-    // this is the time that should be inserted into the media url
-    this.replacementTime = null,
-    // This is supposed to match the time encoded in the media Segment
-    this.mediaStartTime = NaN;
-    // When the source buffer timeOffset is set to MSETimeOffset this is the 
-    // time that will match the seekTarget and video.currentTime
-    this.presentationStartTime = NaN;
-    // Do not schedule this segment until 
-    this.availabilityStartTime = NaN;
-    // Ignore and  discard this segment after
-    this.availabilityEndTime = NaN;
-    // For dynamic mpd's, this is the wall clock time that the video   
-    // element currentTime should be presentationStartTime
-    this.wallStartTime = NaN;
-    // Set the source buffer timeOffset to this
-    this.MSETimeOffset = NaN;
+    this.start = NaN;
 };
 
-Dash.vo.Segment.prototype = {
-    constructor: Dash.vo.Segment
+Dash.vo.Period.prototype = {
+    constructor: Dash.vo.Period
 };

@@ -16,7 +16,6 @@ Dash.dependencies.DashHandler = function () {
 
     var index = -1,
         isDynamic,
-        duration,
         type,
 
         getRepresentationForQuality = function (quality, data) {
@@ -125,7 +124,7 @@ Dash.dependencies.DashHandler = function () {
             return deferred.promise;
         },
 
-        isMediaFinished = function (representation) { // TODO
+        isMediaFinished = function (representation, periodInfo) { // TODO
             var fDuration,
                 fTimescale,
                 fLength,
@@ -145,7 +144,7 @@ Dash.dependencies.DashHandler = function () {
             } else if (representation.hasOwnProperty("SegmentTemplate") && !representation.SegmentTemplate.hasOwnProperty("SegmentTimeline")) {
                 fTimescale = 1;
                 startNumber = 1;
-                sDuration = Math.floor(duration); // Disregard fractional seconds.  TODO : Is this ok?  The logic breaks if we don't do this...
+                sDuration = Math.floor(periodInfo.duration); // Disregard fractional seconds.  TODO : Is this ok?  The logic breaks if we don't do this...
 
                 if (representation.SegmentTemplate.hasOwnProperty("duration")) {
                     fDuration = representation.SegmentTemplate.duration;
@@ -168,8 +167,122 @@ Dash.dependencies.DashHandler = function () {
             return Q.when(isFinished);
         },
 
-        getSegmentsFromTimeline = function (template, timeline) {
+        segmentFromPresentationTime = function (periodInfo, segmentBase, index, duration, timescale) {
+            var self = this,
+                seg,
+                presentationStartTime,
+                presentationEndTime;
+
+            presentationStartTime = (index - 1) * duration;
+            presentationEndTime = self.timelineConverter.calcPresentationTimeFromMediaTime(index * duration, periodInfo, segmentBase);
+
+            seg = new Dash.vo.Segment();
+
+            seg.timescale = timescale;
+            seg.duration = duration;
+            seg.presentationStartTime = presentationStartTime;
+
+            seg.mediaStartTime = self.timelineConverter.calcMediaTimeFromPresentationTime(periodInfo, segmentBase, seg.presentationStartTime);
+
+            seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, isDynamic);
+            seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, isDynamic);
+
+            // at this wall clock time, the video element currentTime should be seg.presentationStartTime
+            seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
+
+            seg.MSETimeOffset = self.timelineConverter.calcMSETimeOffset(periodInfo, segmentBase);
+
+            return seg;
+        },
+
+        getSegmentsFromList = function (periodInfo, list) {
             var segments = [],
+                i,
+                len,
+                seg,
+                s,
+                duration,
+                start = 1;
+
+            if (list.hasOwnProperty("startNumber")) {
+                start = list.startNumber;
+            }
+
+            duration = list.duration / list.timescale;
+
+            for (i = 0, len = list.SegmentURL_asArray.length; i < len; i += 1) {
+                s = list.SegmentURL_asArray[i];
+
+                seg = segmentFromPresentationTime.call(
+                    this,
+                    periodInfo,
+                    list,
+                    Math.max(start, 1) + i,
+                    duration,
+                    list.timescale);
+
+                seg.replacementTime = (Math.max(start, 1) + i - 1) * list.duration;
+                seg.media = s.media;
+                seg.mediaRange = s.mediaRange;
+                seg.index = s.index;
+                seg.indexRange = s.indexRange;
+
+                segments.push(seg);
+                seg = null;
+            }
+
+            return Q.when(segments);
+        },
+
+        getSegmentsFromTemplate = function (periodInfo, template) {
+            var segments = [],
+                i,
+                len,
+                seg = null,
+                start = 1,
+                duration,
+                fTimescale = 1,
+                url = null;
+
+            if (template.hasOwnProperty("startNumber")) {
+                start = template.startNumber;
+            }
+
+            // default to 1 if not present
+            if (template.hasOwnProperty("timescale")) {
+                fTimescale = template.timescale;
+            }
+
+            duration = template.duration / fTimescale;
+
+            len = periodInfo.duration / duration;
+
+            for (i = 0;i < len; i += 1) {
+
+                seg = segmentFromPresentationTime.call(
+                    this,
+                    periodInfo,
+                    template,
+                    Math.max(start, 1) + i,
+                    duration,
+                    fTimescale);
+
+                seg.replacementTime = (Math.max(start, 1) + i - 1) * template.duration;
+                url = template.media;
+                url = replaceNumberForTemplate(url, start + i);
+                url = replaceTimeForTemplate(url, seg.replacementTime);
+                seg.media = url;
+
+                segments.push(seg);
+                seg = null;
+            }
+
+            return Q.when(segments);
+        },
+
+        getSegmentsFromTimeline = function (periodInfo, template, timeline) {
+            var self = this,
+                segments = [],
                 fragments,
                 frag,
                 i,
@@ -178,6 +291,8 @@ Dash.dependencies.DashHandler = function () {
                 repeat,
                 seg,
                 time = 0,
+                endTime = 0,
+                presentationEndTime = 0,
                 count = 1,
                 fTimescale = 1,
                 url;
@@ -200,62 +315,42 @@ Dash.dependencies.DashHandler = function () {
                 }
 
                 for (j = 0; j <= repeat; j += 1) {
+
+                    if (frag.hasOwnProperty("t")) {
+                        time = frag.t;
+                    }
+                    endTime = time + frag.d;
+
+                    presentationEndTime = self.timelineConverter.calcPresentationTimeFromMediaTime(endTime / fTimescale, periodInfo, template);
+
                     seg = new Dash.vo.Segment();
 
                     seg.timescale = fTimescale;
-                    if (frag.hasOwnProperty("t")) {
-                        seg.startTime = frag.t;
-                        time = frag.t;
-                    } else {
-                        seg.startTime = time;
-                    }
+                    seg.duration = frag.d / seg.timescale;
+                    seg.mediaStartTime = time / seg.timescale;
 
-                    seg.duration = frag.d;
+                    seg.presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(seg.mediaStartTime, periodInfo, template);
 
+                    seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, isDynamic);
+                    seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, isDynamic);
+
+                    // at this wall clock time, the video element currentTime should be seg.presentationStartTime
+                    seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
+
+                    seg.MSETimeOffset = self.timelineConverter.calcMSETimeOffset(periodInfo, template);
+
+                    seg.replacementTime = time;
                     url = template.media;
                     url = replaceNumberForTemplate(url, count);
-                    url = replaceTimeForTemplate(url, seg.startTime);
+                    url = replaceTimeForTemplate(url, seg.replacementTime);
                     seg.media = url;
 
                     segments.push(seg);
+                    seg = null;
 
-                    time += seg.duration;
+                    time = endTime;
                     count += 1;
                 }
-            }
-
-            return Q.when(segments);
-        },
-
-        getSegmentsFromList = function (list) {
-            var segments = [],
-                i,
-                len,
-                seg,
-                s,
-                start = 1,
-                baseTime;
-
-            if (list.hasOwnProperty("startNumber")) {
-                start = Math.max(list.startNumber, 1);
-            }
-
-            baseTime = (start - 1) * list.duration;
-
-            for (i = 0, len = list.SegmentURL_asArray.length; i < len; i += 1) {
-                s = list.SegmentURL_asArray[i];
-
-                seg = new Dash.vo.Segment();
-                seg.media = s.media;
-                seg.mediaRange = s.mediaRange;
-                seg.index = s.index;
-                seg.indexRange = s.indexRange;
-
-                seg.timescale = list.timescale;
-                seg.duration = list.duration;
-                seg.startTime = baseTime + (i * list.duration);
-
-                segments.push(seg);
             }
 
             return Q.when(segments);
@@ -274,24 +369,22 @@ Dash.dependencies.DashHandler = function () {
             return this.baseURLExt.loadSegments(url, range);
         },
 
-        getSegments = function (representation) {
-            var segmentPromise;
+        getSegments = function (representation, periodInfo) {
+            var segmentPromise,
+                self = this;
 
-            // We don't need a list of segments in this case.
-            if (representation.hasOwnProperty("SegmentTemplate") && !representation.SegmentTemplate.hasOwnProperty("SegmentTimeline")) {
-                segmentPromise = Q.when(null);
+            // Already figure out the segments.
+            if (representation.hasOwnProperty("segments") && representation.segments !== null) {
+                segmentPromise = Q.when(representation.segments);
             } else {
-                // Already figure out the segments.
-                if (representation.hasOwnProperty("segments") && representation.segments !== null) {
-                    segmentPromise = Q.when(representation.segments);
+                if (representation.hasOwnProperty("SegmentTemplate") && representation.SegmentTemplate.hasOwnProperty("SegmentTimeline")) {
+                    segmentPromise = getSegmentsFromTimeline.call(self, periodInfo, representation.SegmentTemplate, representation.SegmentTemplate.SegmentTimeline);
+                } else if (representation.hasOwnProperty("SegmentTemplate")) {
+                    segmentPromise = getSegmentsFromTemplate.call(self, periodInfo, representation.SegmentTemplate);
+                } else if (representation.hasOwnProperty("SegmentList")) {
+                    segmentPromise = getSegmentsFromList.call(self, periodInfo, representation.SegmentList);
                 } else {
-                    if (representation.hasOwnProperty("SegmentTemplate") && representation.SegmentTemplate.hasOwnProperty("SegmentTimeline")) {
-                        segmentPromise = getSegmentsFromTimeline.call(this, representation.SegmentTemplate, representation.SegmentTemplate.SegmentTimeline);
-                    } else if (representation.hasOwnProperty("SegmentList")) {
-                        segmentPromise = getSegmentsFromList.call(this, representation.SegmentList);
-                    } else {
-                        segmentPromise = getSegmentsFromSource.call(this, representation);
-                    }
+                    segmentPromise = getSegmentsFromSource.call(self, /*periodInfo, */ representation);
                 }
             }
 
@@ -309,8 +402,8 @@ Dash.dependencies.DashHandler = function () {
             if (segments && segments.length > 0) {
                 for (i = segmentLastIdx; i >= 0; i--) {
                     frag = segments[i];
-                    ft = frag.startTime / frag.timescale;
-                    fd = frag.duration / frag.timescale;
+                    ft = frag.presentationStartTime;
+                    fd = frag.duration;
 
                     if (i === (segmentLastIdx) && time > (ft + fd)) {
                         idx = segmentLastIdx;
@@ -355,67 +448,6 @@ Dash.dependencies.DashHandler = function () {
             return Q.when(idx);
         },
 
-        getIndexForTemplate = function (time, template) {
-            var idx = -1,
-                fDuration,
-                fTimescale = 1,
-                startNumber = 1, // SegmentTemplate offset controlled by @startNumber attribute or 1 by default
-                dur;
-
-            if (template.hasOwnProperty("duration")) {
-                fDuration = template.duration;
-            } else {
-                throw "Expected 'duration' attribute on SegmentTemplate!";
-            }
-
-            // default to 1 if not present
-            if (template.hasOwnProperty("timescale")) {
-                fTimescale = template.timescale;
-            }
-
-            if (template.hasOwnProperty("startNumber")) {
-                startNumber = template.startNumber;
-            }
-
-            dur = (fDuration / fTimescale);
-            idx = Math.floor(time / dur);
-
-            idx += startNumber; // apply first item offset
-
-            return Q.when(idx);
-        },
-
-        getRequestForTemplate = function (index, template, representation) {
-            var request = new MediaPlayer.vo.SegmentRequest(),
-                url,
-                fTimescale = 1,
-                time;
-
-            // default to 1 if not present
-            if (template.hasOwnProperty("timescale")) {
-                fTimescale = template.timescale;
-            }
-
-            time = (template.duration * index) / fTimescale;
-            time = Math.floor(time);
-
-            url = template.media;
-
-            url = replaceNumberForTemplate(url, index);
-            url = replaceTimeForTemplate(url, time);
-            url = replaceBandwidthForTemplate(url, representation.bandwidth);
-            url = replaceIDForTemplate(url, representation.id);
-
-            request.streamType = type;
-            request.type = "Media Segment";
-            request.url = getRequestUrl(url, representation.BaseURL);
-            request.duration = template.duration / fTimescale;
-            request.timescale = fTimescale;
-            request.startTime = (index * template.duration) / fTimescale;
-
-            return Q.when(request);
-        },
-
         getRequestForSegment = function (index, segment, representation) {
             if (segment === null || segment === undefined) {
                 return Q.when(null);
@@ -425,8 +457,8 @@ Dash.dependencies.DashHandler = function () {
                 url;
 
             url = getRequestUrl(segment.media, representation.BaseURL);
-            url = replaceNumberForTemplate(url, index);
-            url = replaceTimeForTemplate(url, segment.startTime);
+            url = replaceNumberForTemplate(url, index + 1);
+            url = replaceTimeForTemplate(url, segment.replacementTime);
             url = replaceBandwidthForTemplate(url, representation.bandwidth);
             url = replaceIDForTemplate(url, representation.id);
 
@@ -434,45 +466,32 @@ Dash.dependencies.DashHandler = function () {
             request.type = "Media Segment";
             request.url = url;
             request.range = segment.mediaRange;
-            request.startTime = segment.startTime / segment.timescale;
-            request.duration = segment.duration / segment.timescale;
+            request.startTime = segment.presentationStartTime;
+            request.duration = segment.duration;
             request.timescale = segment.timescale;
 
             return Q.when(request);
         },
 
-        getForTime = function (time, quality, data) {
+        getForTime = function (periodInfo, time, quality, data) {
             var deferred,
                 representation = getRepresentationForQuality(quality, data),
                 request,
                 segment,
-                usingTemplate = false,
                 self = this;
 
             self.debug.log("Getting the request for time: " + time);
 
             deferred = Q.defer();
-
-            getSegments.call(self, representation).then(
+            getSegments.call(self, representation, periodInfo).then(
                 function (segments) {
                     var segmentsPromise;
 
                     self.debug.log("Got segments.");
                     self.debug.log(segments);
-                    // There's no segments so we *must* have a SegmentTemplate.
-                    if (segments === null) {
-                        if (!representation.hasOwnProperty("SegmentTemplate")) {
-                            throw "Expected SegmentTemplate!";
-                        }
-                        usingTemplate = true;
-                        self.debug.log("No segments found, so we must be using a SegmentTemplate.");
-                        segmentsPromise = getIndexForTemplate.call(self, time, representation.SegmentTemplate);
-                    } else {
-                        self.debug.log("Got a list of segments, so dig deeper.");
-                        representation.segments = segments;
-                        usingTemplate = false;
-                        segmentsPromise = getIndexForSegments.call(self, time, segments);
-                    }
+                    self.debug.log("Got a list of segments, so dig deeper.");
+                    representation.segments = segments;
+                    segmentsPromise = getIndexForSegments.call(self, time, segments);
                     return segmentsPromise;
                 }
             ).then(
@@ -480,7 +499,7 @@ Dash.dependencies.DashHandler = function () {
                     self.debug.log("Index for time " + time + " is " + newIndex);
                     index = newIndex;
 
-                    return isMediaFinished.call(self, representation);
+                    return isMediaFinished.call(self, representation, periodInfo);
                 }
             ).then(
                 function (finished) {
@@ -494,12 +513,8 @@ Dash.dependencies.DashHandler = function () {
                         self.debug.log(request);
                         deferred.resolve(request);
                     } else {
-                        if (usingTemplate) {
-                            requestPromise = getRequestForTemplate.call(self, index, representation.SegmentTemplate, representation);
-                        } else {
-                            segment = representation.segments[index];
-                            requestPromise = getRequestForSegment.call(self, index, segment, representation);
-                        }
+                        segment = representation.segments[index];
+                        requestPromise = getRequestForSegment.call(self, index, segment, representation);
                     }
 
                     return requestPromise;
@@ -515,7 +530,7 @@ Dash.dependencies.DashHandler = function () {
             return deferred.promise;
         },
 
-        getNext = function (quality, data) {
+        getNext = function (periodInfo, quality, data) {
             var deferred,
                 representation = getRepresentationForQuality(quality, data),
                 request,
@@ -533,7 +548,7 @@ Dash.dependencies.DashHandler = function () {
 
             deferred = Q.defer();
 
-            isMediaFinished.call(self, representation).then(
+            isMediaFinished.call(self, representation, periodInfo).then(
                 function (finished) {
                     self.debug.log("Stream finished? " + finished);
                     if (finished) {
@@ -543,24 +558,15 @@ Dash.dependencies.DashHandler = function () {
                         self.debug.log(request);
                         deferred.resolve(request);
                     } else {
-                        getSegments.call(self, representation).then(
+                        getSegments.call(self, representation, periodInfo).then(
                             function (segments) {
                                 var segmentsPromise;
 
                                 self.debug.log("Got segments.");
                                 self.debug.log(segments);
-                                // There's no segments so we *must* have a SegmentTemplate.
-                                if (segments === null) {
-                                    if (!representation.hasOwnProperty("SegmentTemplate")) {
-                                        throw "Expected SegmentTemplate!";
-                                    }
-                                    self.debug.log("No segments found, so we must be using a SegmentTemplate.");
-                                    segmentsPromise = getRequestForTemplate.call(self, index, representation.SegmentTemplate, representation);
-                                } else {
-                                    representation.segments = segments;
-                                    segment = representation.segments[index];
-                                    segmentsPromise = getRequestForSegment.call(self, index, segment, representation);
-                                }
+                                representation.segments = segments;
+                                segment = representation.segments[index];
+                                segmentsPromise = getRequestForSegment.call(self, index, segment, representation);
                                 return segmentsPromise;
                             }
                         ).then(
@@ -577,44 +583,20 @@ Dash.dependencies.DashHandler = function () {
             return deferred.promise;
         },
 
-        getSegmentCountForDuration = function (quality, data, requiredDuration) {
+        getSegmentCountForDuration = function (periodInfo, quality, data, requiredDuration) {
             var self = this,
                 representation = getRepresentationForQuality(quality, data),
                 deferred = Q.defer(),
                 segmentDuration,
-                segmentCount = 0,
-                segment,
-                ft = 1,
-                fd;
+                segmentCount = 0;
 
             if (requiredDuration <= 0) {
                 return Q.when(segmentCount);
             }
 
-            getSegments.call(self, representation).then(
+            getSegments.call(self, representation, periodInfo).then(
                 function (segments) {
-                    if (segments === null || segments === undefined) {
-                        if (!representation.hasOwnProperty("SegmentTemplate")) {
-                            throw "Expected SegmentTemplate!";
-                        }
-
-                        if (representation.SegmentTemplate.hasOwnProperty("timescale")) {
-                            ft = representation.SegmentTemplate.timescale;
-                        }
-
-                        fd = representation.SegmentTemplate.duration;
-                        segmentDuration = fd / ft;
-                    } else {
-                        // The duration of the segments is supposed to be the same for all segments, so we just grab the first one
-                        segment = segments[0];
-                        if (segment.hasOwnProperty("timescale")) {
-                            ft = segment.timescale;
-                        }
-
-                        fd = segment.duration;
-                        segmentDuration = fd / ft;
-                    }
-
+                    segmentDuration = segments[0].duration;
                     segmentCount = Math.ceil((requiredDuration + (segmentDuration / 2)) / segmentDuration);
                     deferred.resolve(segmentCount);
                 }
@@ -623,19 +605,15 @@ Dash.dependencies.DashHandler = function () {
             return deferred.promise;
         },
 
-        getCurrentTime = function (quality, data) {
+        getCurrentTime = function (periodInfo, quality, data) {
             if (index === -1) {
                 return Q.when(0);
             }
 
-            var self,
+            var self = this,
                 representation = getRepresentationForQuality(quality, data),
                 time,
                 bufferedIndex,
-                fs,
-                fd,
-                ft = 1,
-                startNumber = 1,
                 deferred = Q.defer();
 
             // get the last time again to be safe
@@ -644,39 +622,13 @@ Dash.dependencies.DashHandler = function () {
                 bufferedIndex = 0;
             }
 
-            getSegments.call(self, representation).then(
+            getSegments.call(self, representation, periodInfo).then(
                 function (segments) {
-                    // There's no segments so we *must* have a SegmentTemplate.
-                    if (segments === null || segments === undefined) {
-                        if (!representation.hasOwnProperty("SegmentTemplate")) {
-                            throw "Expected SegmentTemplate!";
-                        }
-
-                        fd = representation.SegmentTemplate.duration;
-                        if (representation.SegmentTemplate.hasOwnProperty("timescale")) {
-                            ft = representation.SegmentTemplate.timescale;
-                        }
-
-                        if (representation.SegmentTemplate.hasOwnProperty("startNumber")) {
-                            startNumber = representation.SegmentTemplate.startNumber;
-                        }
-
-                        bufferedIndex -= startNumber;
-
-                        time = (fd / ft) * (bufferedIndex); // + 1);
-                    } else {
-                        if (bufferedIndex >= segments.length) {
-                            bufferedIndex = segments.length - 1;
-                        }
-
-                        fs = segments[bufferedIndex].startTime;
-                        fd = segments[bufferedIndex].duration;
-                        if (segments[bufferedIndex].hasOwnProperty("timescale")) {
-                            ft = segments[bufferedIndex].timescale;
-                        }
-
-                        time = (fs / ft); // + (fd / ft);
+                    if (bufferedIndex >= segments.length) {
+                        bufferedIndex = segments.length - 1;
                     }
+
+                    time = segments[bufferedIndex].presentationTime;
 
                     deferred.resolve(time);
                 }
@@ -691,6 +643,7 @@ Dash.dependencies.DashHandler = function () {
         manifestModel: undefined,
         manifestExt:undefined,
         errHandler: undefined,
+        timelineConverter: undefined,
 
         getType: function () {
             return type;
@@ -705,13 +658,6 @@ Dash.dependencies.DashHandler = function () {
         },
         setIsDynamic: function (value) {
             isDynamic = value;
-        },
-
-        getDuration: function () {
-            return duration;
-        },
-        setDuration: function (value) {
-            duration = value;
         },
 
         getInitRequest: getInit,

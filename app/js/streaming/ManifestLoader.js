@@ -29,6 +29,7 @@ MediaPlayer.dependencies.ManifestLoader = function () {
                 deferred = Q.defer(),
                 request = new XMLHttpRequest(),
                 requestTime = new Date(),
+                mpdLoadedTime = null,
                 loaded = false,
                 self = this;
 
@@ -45,6 +46,8 @@ MediaPlayer.dependencies.ManifestLoader = function () {
             request.onload = function () {
                 loaded = true;
 
+                mpdLoadedTime = new Date();
+
                 self.metricsModel.addHttpRequest("stream",
                                                  null,
                                                  "MPD",
@@ -52,7 +55,7 @@ MediaPlayer.dependencies.ManifestLoader = function () {
                                                  null,
                                                  null,
                                                  requestTime,
-                                                 new Date(),
+                                                 mpdLoadedTime,
                                                  request.status,
                                                  null,
                                                  null);
@@ -60,6 +63,7 @@ MediaPlayer.dependencies.ManifestLoader = function () {
                 self.parser.parse(request.responseText, baseUrl).then(
                     function (manifest) {
                         manifest.mpdUrl = url;
+                        manifest.mpdLoadedTime = mpdLoadedTime;                        
                         deferred.resolve(manifest);
                     }
                 );

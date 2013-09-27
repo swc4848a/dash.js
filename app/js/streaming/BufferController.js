@@ -31,10 +31,8 @@ MediaPlayer.dependencies.BufferController = function () {
         playingTime,
         lastQuality = -1,
         stalled = false,
-        liveOffset = 0,
         deferredAppend = null,
-        periodIndex = -1,
-        timestampOffset = 0,
+        periodInfo = null,
         fragmentsToLoad = 0,
 
         type,
@@ -121,7 +119,7 @@ MediaPlayer.dependencies.BufferController = function () {
 
             this.debug.log("BufferController " + type + " seek: " + time);
             seeking = true;
-            seekTarget = time - liveOffset - timestampOffset;
+            seekTarget = time;
             currentTime = new Date();
             clearPlayListTraceMetrics(currentTime, MediaPlayer.vo.metrics.PlayList.Trace.USER_REQUEST_STOP_REASON);
             playListMetrics = this.metricsModel.addPlayList(type, currentTime, seekTarget, MediaPlayer.vo.metrics.PlayList.SEEK_START_REASON);
@@ -257,7 +255,7 @@ MediaPlayer.dependencies.BufferController = function () {
             if (dataChanged && !seeking) {
                 //time = self.videoModel.getCurrentTime();
                 self.debug.log("Data changed - loading the " + type + " fragment for time: " + playingTime);
-                promise = self.indexHandler.getSegmentRequestForTime(playingTime - timestampOffset - liveOffset, quality, data);
+                promise = self.indexHandler.getSegmentRequestForTime(periodInfo, playingTime, quality, data);
             } else {
                 var deferred = Q.defer(),
                     segmentTime = self.videoModel.getCurrentTime();
@@ -271,7 +269,7 @@ MediaPlayer.dependencies.BufferController = function () {
                             segmentTime = range.end;
                         }
                         self.debug.log("Loading the " + type + " fragment for time: " + segmentTime);
-                        self.indexHandler.getSegmentRequestForTime(segmentTime - timestampOffset - liveOffset, quality, data).then(
+                        self.indexHandler.getSegmentRequestForTime(periodInfo, segmentTime, quality, data).then(
                             function (request) {
                                 deferred.resolve(request);
                             }
@@ -291,7 +289,7 @@ MediaPlayer.dependencies.BufferController = function () {
             if (request !== null) {
                 // If we have already loaded the given fragment ask for the next one. Otherwise prepare it to get loaded
                 if (self.fragmentController.isFragmentLoaded(self, request)) {
-                    self.indexHandler.getNextSegmentRequest(lastQuality, data).then(onFragmentRequest.bind(self));
+                    self.indexHandler.getNextSegmentRequest(periodInfo, lastQuality, data).then(onFragmentRequest.bind(self));
                 } else {
                     self.debug.log("Loading an " + type + " fragment: " + request.url);
                     self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, signalStreamComplete).then(
@@ -391,7 +389,7 @@ MediaPlayer.dependencies.BufferController = function () {
                 deferred = Q.defer();
                 self.bufferExt.getRequiredBufferLength(currentBufferLength, self.requestScheduler.getExecuteInterval(self)/1000, playbackRate).then(
                     function (requiredBufferLength) {
-                        self.indexHandler.getSegmentCountForDuration(quality, data, requiredBufferLength).then(
+                        self.indexHandler.getSegmentCountForDuration(periodInfo, quality, data, requiredBufferLength).then(
                             function(count) {
                                 deferred.resolve(count);
                             }
@@ -515,12 +513,12 @@ MediaPlayer.dependencies.BufferController = function () {
         system: undefined,
         errHandler: undefined,
 
-        initialize: function (type, periodIndex, data, buffer, minBufferTime, videoModel, scheduler, fragmentController) {
+        initialize: function (type, periodInfo, data, buffer, minBufferTime, videoModel, scheduler, fragmentController) {
             var self = this;
 
             self.setVideoModel(videoModel);
             self.setType(type);
-            self.setPeriodIndex(periodIndex);
+            self.setPeriodInfo(periodInfo);
             self.setData(data);
             self.setBuffer(buffer);
             self.setScheduler(scheduler);
@@ -530,25 +528,6 @@ MediaPlayer.dependencies.BufferController = function () {
             self.manifestExt.getIsDynamic(self.manifestModel.getValue()).then(
                 function (isDynamic) {
                     self.indexHandler.setIsDynamic(isDynamic);
-                    self.manifestExt.getTimestampOffsetForPeriod(periodIndex, self.manifestModel.getValue()).then(
-                        function (offset) {
-                            if (isDynamic) {
-                                self.getBuffer().timestampOffset = offset;
-                            }
-                            timestampOffset = offset;
-                        }
-                    );
-                }
-            );
-
-            self.manifestExt.getStartOffsetForPeriod(self.manifestModel.getValue(), periodIndex).then(
-                function (liveStartValue) {
-                    liveOffset = liveStartValue;
-                    self.manifestExt.getDurationForPeriod(periodIndex, self.manifestModel.getValue()).then(
-                        function (duration) {
-                            self.indexHandler.setDuration(duration + liveOffset);
-                        }
-                    );
                 }
             );
 
@@ -568,12 +547,12 @@ MediaPlayer.dependencies.BufferController = function () {
             }
         },
 
-        getPeriodIndex: function () {
-            return periodIndex;
+        getPeriodInfo: function () {
+            return periodInfo;
         },
 
-        setPeriodIndex: function (value) {
-            periodIndex = value;
+        setPeriodInfo: function (value) {
+            periodInfo = value;
         },
 
         getVideoModel: function () {
@@ -600,23 +579,6 @@ MediaPlayer.dependencies.BufferController = function () {
             this.fragmentController = value;
         },
 
-        getTimestampOffset: function() {
-            return timestampOffset;
-        },
-
-        setTimestampOffset: function(value) {
-            this.getBuffer().timestampOffset = timestampOffset;
-            timestampOffset = value;
-        },
-
-        getLiveOffset: function() {
-            return liveOffset;
-        },
-
-        setLiveStart: function(value) {
-            liveOffset = value;
-        },
-
         getAutoSwitchBitrate : function () {
             var self = this;
             return self.abrController.getAutoSwitchBitrate();
@@ -637,7 +599,7 @@ MediaPlayer.dependencies.BufferController = function () {
             if (data !== null && data !== undefined) {
                 self.abrController.getPlaybackQuality(type, data).then(
                     function (quality) {
-                        self.indexHandler.getCurrentTime(quality, data).then(
+                        self.indexHandler.getCurrentTime(periodInfo, quality, data).then(
                             function (time) {
                                 dataChanged = true;
                                 playingTime = time;

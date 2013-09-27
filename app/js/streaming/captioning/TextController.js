@@ -17,7 +17,7 @@ MediaPlayer.dependencies.TextController = function () {
          //LOADED = "LOADED",
          READY = "READY",
          initialized = false,
-         periodIndex = -1,
+         periodInfo = null,
          data,
          buffer,
          state = READY,
@@ -71,11 +71,11 @@ MediaPlayer.dependencies.TextController = function () {
         indexHandler: undefined,
         sourceBufferExt: undefined,
         debug: undefined,
-        initialize: function (periodIndex, data, buffer, videoModel) {
+        initialize: function (periodInfo, data, buffer, videoModel) {
             var self = this;
 
             self.setVideoModel(videoModel);
-            self.setPeriodIndex(periodIndex);
+            self.setPeriodIndex(periodInfo);
             self.setData(data);
             self.setBuffer(buffer);
 
@@ -83,11 +83,7 @@ MediaPlayer.dependencies.TextController = function () {
         },
 
         getPeriodIndex: function () {
-            return periodIndex;
-        },
-
-        setPeriodIndex: function (value) {
-            periodIndex = value;
+            return periodInfo.index;
         },
 
         getVideoModel: function () {

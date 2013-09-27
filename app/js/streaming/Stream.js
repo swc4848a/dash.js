@@ -39,8 +39,7 @@ MediaPlayer.dependencies.Stream = function () {
         seekingListener,
         seekedListener,
         timeupdateListener,
-        duration,
-        periodIndex = -1,
+        periodInfo = null,
 
         needKeyListener,
         keyMessageListener,
@@ -308,13 +307,13 @@ MediaPlayer.dependencies.Stream = function () {
                             self.debug.log("Gathering information for buffers. (3)");
                             self.debug.log("Buffer time: " + time);
                             minBufferTime = time;
-                            return self.manifestExt.getVideoData(manifest, periodIndex);
+                            return self.manifestExt.getVideoData(manifest, periodInfo.index);
                         }
                     ).then(
                         function (videoData) {
                             if (videoData !== null) {
                                 self.debug.log("Create video buffer.");
-                                self.manifestExt.getDataIndex(videoData, manifest, periodIndex).then(
+                                self.manifestExt.getDataIndex(videoData, manifest, periodInfo.index).then(
                                     function (index) {
                                         videoTrackIndex = index;
                                         self.debug.log("Save video track: " + videoTrackIndex);
@@ -358,7 +357,7 @@ MediaPlayer.dependencies.Stream = function () {
                                             // TODO : Pass to controller and then pass to each method on handler?
 
                                             videoController = self.system.getObject("bufferController");
-                                            videoController.initialize("video", periodIndex, videoData, buffer, minBufferTime, self.videoModel, self.requestScheduler, self.fragmentController);
+                                            videoController.initialize("video", periodInfo, videoData, buffer, minBufferTime, self.videoModel, self.requestScheduler, self.fragmentController);
                                             self.debug.log("Video is ready!");
                                         }
 
@@ -377,15 +376,15 @@ MediaPlayer.dependencies.Stream = function () {
                                 checkIfInitialized.call(self, videoReady, audioReady, textTrackReady,  initialize);
                             }
 
-                            return self.manifestExt.getAudioDatas(manifest, periodIndex);
+                            return self.manifestExt.getAudioDatas(manifest, periodInfo.index);
                         }
                     ).then(
                         function (audioDatas) {
                             if (audioDatas !== null && audioDatas.length > 0) {
                                 self.debug.log("Have audio streams: " + audioDatas.length);
-                                self.manifestExt.getPrimaryAudioData(manifest, periodIndex).then(
+                                self.manifestExt.getPrimaryAudioData(manifest, periodInfo.index).then(
                                     function (primaryAudioData) {
-                                        self.manifestExt.getDataIndex(primaryAudioData, manifest, periodIndex).then(
+                                        self.manifestExt.getDataIndex(primaryAudioData, manifest, periodInfo.index).then(
                                             function (index) {
                                                 audioTrackIndex = index;
                                                 self.debug.log("Save audio track: " + audioTrackIndex);
@@ -414,7 +413,7 @@ MediaPlayer.dependencies.Stream = function () {
                                                     // TODO : How to tell index handler live/duration?
                                                     // TODO : Pass to controller and then pass to each method on handler?
                                                     audioController = self.system.getObject("bufferController");
-                                                    audioController.initialize("audio", periodIndex, primaryAudioData, buffer, minBufferTime, self.videoModel, self.requestScheduler, self.fragmentController);
+                                                    audioController.initialize("audio", periodInfo, primaryAudioData, buffer, minBufferTime, self.videoModel, self.requestScheduler, self.fragmentController);
                                                     self.debug.log("Audio is ready!");
                                                 }
 
@@ -435,13 +434,13 @@ MediaPlayer.dependencies.Stream = function () {
                                 checkIfInitialized.call(self, videoReady, audioReady,textTrackReady,  initialize);
                             }
 
-                            return self.manifestExt.getTextData(manifest, periodIndex);
+                            return self.manifestExt.getTextData(manifest, periodInfo.index);
                         }
                     ).then(
                         function (textData) {
                             var mimeType;
                             if (textData !== null ) {
-                                self.manifestExt.getDataIndex(textData, manifest, periodIndex).then(
+                                self.manifestExt.getDataIndex(textData, manifest, periodInfo.index).then(
                                     function (index) {
                                         textTrackIndex = index;
                                         self.debug.log("Save text track: " + textTrackIndex);
@@ -459,7 +458,7 @@ MediaPlayer.dependencies.Stream = function () {
                                             self.debug.log("Source buffer was not created for text track");
                                         } else {
                                             textController = self.system.getObject("textController");
-                                            textController.initialize(periodIndex, textData, buffer, self.videoModel);
+                                            textController.initialize(periodInfo.index, textData, buffer, self.videoModel);
                                             if (buffer.hasOwnProperty('initialize')) {
                                                 buffer.initialize(mimeType, textController);
                                             }
@@ -494,12 +493,6 @@ MediaPlayer.dependencies.Stream = function () {
                 initialize = Q.defer();
 
             self.debug.log("Getting ready for playback...");
-
-            self.manifestExt.getDurationForPeriod(periodIndex, self.manifestModel.getValue()).then(
-                function(periodDuration) {
-                    duration = periodDuration;
-                }
-            );
 
             self.manifestExt.getDuration(self.manifestModel.getValue()).then(
                 function (duration) {
@@ -620,7 +613,6 @@ MediaPlayer.dependencies.Stream = function () {
             self.debug.log("Stream start loading.");
 
             manifest = manifestResult;
-            self.manifestModel.setValue(manifest);
             self.debug.log("Manifest has loaded.");
             self.debug.log(self.manifestModel.getValue());
             self.manifestUpdater.init();
@@ -652,7 +644,7 @@ MediaPlayer.dependencies.Stream = function () {
                 function () {
                     self.debug.log("element loaded!");
                     // only first period stream must be played automatically during playback initialization
-                    if (periodIndex > 0) {
+                    if (periodInfo.index > 0) {
                         // required to stop unnecessary buffering
                         pause.call(self);
                         return;
@@ -663,16 +655,8 @@ MediaPlayer.dependencies.Stream = function () {
         },
 
         initPlayback = function() {
-            var self = this,
-                totalOffset;
-
-            self.manifestExt.getInitialStartTime(self.manifestModel.getValue(), periodIndex).then(
-                function (startTime) {
-                    totalOffset = startTime + self.getTimestampOffset() + self.getLiveOffset();
-                    self.debug.log("Got content.  Starting playback at offset: " + totalOffset);
-                    seek.call(self, totalOffset);
-                }
-            );
+            this.debug.log("Got content.  Starting playback at offset: " + periodInfo.start);
+            seek.call(this, periodInfo.start);
         },
 
         currentTimeChanged = function () {
@@ -694,13 +678,13 @@ MediaPlayer.dependencies.Stream = function () {
                 videoData = videoController.getData();
 
                 if (videoData.hasOwnProperty("id")) {
-                    self.manifestExt.getDataForId(videoData.id, manifest, periodIndex).then(
+                    self.manifestExt.getDataForId(videoData.id, manifest, periodInfo.index).then(
                         function (data) {
                             videoController.setData(data);
                         }
                     );
                 } else {
-                    self.manifestExt.getDataForIndex(videoTrackIndex, manifest, periodIndex).then(
+                    self.manifestExt.getDataForIndex(videoTrackIndex, manifest, periodInfo.index).then(
                         function (data) {
                             videoController.setData(data);
                         }
@@ -712,13 +696,13 @@ MediaPlayer.dependencies.Stream = function () {
                 audioData = audioController.getData();
 
                 if (audioData.hasOwnProperty("id")) {
-                    self.manifestExt.getDataForId(audioData.id, manifest, periodIndex).then(
+                    self.manifestExt.getDataForId(audioData.id, manifest, periodInfo.index).then(
                         function (data) {
                             audioController.setData(data);
                         }
                     );
                 } else {
-                    self.manifestExt.getDataForIndex(audioTrackIndex, manifest, periodIndex).then(
+                    self.manifestExt.getDataForIndex(audioTrackIndex, manifest, periodInfo.index).then(
                         function (data) {
                             audioController.setData(data);
                         }
@@ -764,8 +748,8 @@ MediaPlayer.dependencies.Stream = function () {
             loadedListener = onLoad.bind(this);
         },
 
-        load: function(manifest, periodIndexValue) {
-            periodIndex = periodIndexValue;
+        load: function(manifest, periodInfoValue) {
+            periodInfo = periodInfoValue;
             doLoad.call(this, manifest);
         },
 
@@ -825,25 +809,15 @@ MediaPlayer.dependencies.Stream = function () {
         },
 
         getDuration: function () {
-            return duration;
+            return periodInfo.duration;
         },
 
-        setPeriodIndex: function(value) {
-            periodIndex = value;
+        getStartTime: function() {
+            return periodInfo.start;
         },
 
         getPeriodIndex: function() {
-            return periodIndex;
-        },
-
-        getTimestampOffset: function() {
-            return videoController ? videoController.getTimestampOffset() :
-                (audioController ? audioController.getTimestampOffset() : 0);
-        },
-
-        getLiveOffset: function() {
-            return videoController ? videoController.getLiveOffset() :
-                (audioController ? audioController.getLiveOffset() : 0);
+            return periodInfo.index;
         },
 
         initPlayback: initPlayback,
