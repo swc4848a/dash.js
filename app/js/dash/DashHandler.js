@@ -217,11 +217,11 @@ Dash.dependencies.DashHandler = function () {
                     this,
                     periodInfo,
                     list,
-                    Math.max(start, 1) + i,
+                    start + i,
                     duration,
                     list.timescale);
 
-                seg.replacementTime = (Math.max(start, 1) + i - 1) * list.duration;
+                seg.replacementTime = (start + i - 1) * list.duration;
                 seg.media = s.media;
                 seg.mediaRange = s.mediaRange;
                 seg.index = s.index;
@@ -263,11 +263,11 @@ Dash.dependencies.DashHandler = function () {
                     this,
                     periodInfo,
                     template,
-                    Math.max(start, 1) + i,
+                    start + i,
                     duration,
                     fTimescale);
 
-                seg.replacementTime = (Math.max(start, 1) + i - 1) * template.duration;
+                seg.replacementTime = (start + i - 1) * template.duration;
                 url = template.media;
                 url = replaceNumberForTemplate(url, start + i);
                 url = replaceTimeForTemplate(url, seg.replacementTime);
