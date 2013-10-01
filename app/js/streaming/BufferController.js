@@ -28,6 +28,7 @@ MediaPlayer.dependencies.BufferController = function () {
         seekTarget = -1,
         qualityChanged = false,
         dataChanged = true,
+        representation,
         playingTime,
         lastQuality = -1,
         stalled = false,
@@ -140,11 +141,15 @@ MediaPlayer.dependencies.BufferController = function () {
         },
 
         getRepresentationForQuality = function (quality, data) {
-            var representation = null;
-            if (data && data.Representation_asArray && data.Representation_asArray.length > 0) {
-                representation = data.Representation_asArray[quality];
-            }
-            return representation;
+            var self = this,
+                deferred = Q.defer();
+            self.manifestExt.getDataIndex(data, self.manifestModel.getValue(), periodInfo.index).then(
+                function(idx) {
+                    deferred.resolve(periodInfo.adaptations[idx].representations[quality]);
+                }
+            );
+
+            return deferred.promise;
         },
 
         finishValidation = function () {
@@ -172,8 +177,7 @@ MediaPlayer.dependencies.BufferController = function () {
             self.fragmentController.process(response.data).then(
                 function (data) {
                     if (data !== null) {
-                        var representation = getRepresentationForQuality(lastQuality, self.getData()),
-                            currentVideoTime = self.videoModel.getCurrentTime(),
+                        var currentVideoTime = self.videoModel.getCurrentTime(),
                             currentTime = new Date();
 
                         self.debug.log("Push (" + type + ") bytes: " + data.byteLength);
@@ -241,7 +245,7 @@ MediaPlayer.dependencies.BufferController = function () {
             }
 
             if (qualityChanged) {
-                initializationPromise = this.indexHandler.getInitRequest(quality, data);
+                initializationPromise = this.indexHandler.getInitRequest(representation);
             } else {
                 initializationPromise = Q.when(null);
             }
@@ -255,7 +259,7 @@ MediaPlayer.dependencies.BufferController = function () {
             if (dataChanged && !seeking) {
                 //time = self.videoModel.getCurrentTime();
                 self.debug.log("Data changed - loading the " + type + " fragment for time: " + playingTime);
-                promise = self.indexHandler.getSegmentRequestForTime(periodInfo, playingTime, quality, data);
+                promise = self.indexHandler.getSegmentRequestForTime(representation, playingTime);
             } else {
                 var deferred = Q.defer(),
                     segmentTime = self.videoModel.getCurrentTime();
@@ -269,7 +273,7 @@ MediaPlayer.dependencies.BufferController = function () {
                             segmentTime = range.end;
                         }
                         self.debug.log("Loading the " + type + " fragment for time: " + segmentTime);
-                        self.indexHandler.getSegmentRequestForTime(periodInfo, segmentTime, quality, data).then(
+                        self.indexHandler.getSegmentRequestForTime(representation, segmentTime).then(
                             function (request) {
                                 deferred.resolve(request);
                             }
@@ -289,7 +293,7 @@ MediaPlayer.dependencies.BufferController = function () {
             if (request !== null) {
                 // If we have already loaded the given fragment ask for the next one. Otherwise prepare it to get loaded
                 if (self.fragmentController.isFragmentLoaded(self, request)) {
-                    self.indexHandler.getNextSegmentRequest(periodInfo, lastQuality, data).then(onFragmentRequest.bind(self));
+                    self.indexHandler.getNextSegmentRequest(representation).then(onFragmentRequest.bind(self));
                 } else {
                     self.debug.log("Loading an " + type + " fragment: " + request.url);
                     self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, signalStreamComplete).then(
@@ -389,7 +393,7 @@ MediaPlayer.dependencies.BufferController = function () {
                 deferred = Q.defer();
                 self.bufferExt.getRequiredBufferLength(currentBufferLength, self.requestScheduler.getExecuteInterval(self)/1000, playbackRate).then(
                     function (requiredBufferLength) {
-                        self.indexHandler.getSegmentCountForDuration(periodInfo, quality, data, requiredBufferLength).then(
+                        self.indexHandler.getSegmentCountForDuration(representation, requiredBufferLength).then(
                             function(count) {
                                 deferred.resolve(count);
                             }
@@ -419,8 +423,8 @@ MediaPlayer.dependencies.BufferController = function () {
 
         validate = function () {
             var self = this,
+                deferred = null,
                 newQuality,
-                representation = null,
                 now = new Date(),
                 currentVideoTime = self.videoModel.getCurrentTime(),
                 currentTime = getWorkingTime.call(self);
@@ -460,16 +464,24 @@ MediaPlayer.dependencies.BufferController = function () {
                                 qualityChanged = (quality !== lastQuality);
 
                                 if (qualityChanged === true) {
-                                    representation = getRepresentationForQuality(newQuality, self.getData());
+                                    deferred = Q.defer();
+                                    getRepresentationForQuality.call(self, newQuality, self.getData()).then(
+                                        function(representationValue) {
+                                            representation = representationValue;
+                                            if (representation === null || representation === undefined) {
+                                                throw "Unexpected error!";
+                                            }
 
-                                    if (representation === null || representation === undefined) {
-                                        throw "Unexpected error!";
-                                    }
-
-                                    clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.REPRESENTATION_SWITCH_STOP_REASON);
-                                    self.metricsModel.addRepresentationSwitch(type, now, currentVideoTime, representation.id);
+                                            clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.REPRESENTATION_SWITCH_STOP_REASON);
+                                            self.metricsModel.addRepresentationSwitch(type, now, currentVideoTime, representation.id);
+                                            deferred.resolve(quality);
+                                        }
+                                    );
                                 }
-
+                                return Q.when(deferred ? deferred.promise : quality);
+                            }
+                        ).then(
+                            function(quality) {
                                 self.debug.log(qualityChanged ? (type + " Quality changed to: " + quality) : "Quality didn't change.");
                                 return getRequiredFragmentCount.call(self, quality, length);
                             }
@@ -599,11 +611,16 @@ MediaPlayer.dependencies.BufferController = function () {
             if (data !== null && data !== undefined) {
                 self.abrController.getPlaybackQuality(type, data).then(
                     function (quality) {
-                        self.indexHandler.getCurrentTime(periodInfo, quality, data).then(
+                        self.indexHandler.getCurrentTime(representation).then(
                             function (time) {
                                 dataChanged = true;
                                 playingTime = time;
                                 data = value;
+                                getRepresentationForQuality.call(self, quality, data).then(
+                                    function(representationValue) {
+                                        representation = representationValue;
+                                    }
+                                );
                             }
                         );
                     }

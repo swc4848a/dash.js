@@ -380,21 +380,6 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         return Q.when(data.ContentProtection_asArray);
     },
 
-    getSegmentInfoFor: function (representation) {
-        if (representation.hasOwnProperty("SegmentBase")) {
-            return representation.SegmentBase;
-        }
-        else if (representation.hasOwnProperty("SegmentList")) {
-            return representation.SegmentList;
-        }
-        else if (representation.hasOwnProperty("SegmentTemplate")) {
-            return representation.SegmentTemplate;
-        }
-        else {
-            return null;
-        }
-    },
-
     getIsDynamic: function (manifest) {
         "use strict";
         var isDynamic =  manifest.type == "dynamic";
@@ -440,11 +425,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         self.getIsDynamic(manifest).then(
             function(isDynamic) {
                 if (isDynamic) {
-                    firstPeriod = new Dash.vo.Period();
-                    firstPeriod.index = 0;
-                    firstPeriod.start = manifest.Period_asArray[0].start;
-
-                    mpdDuration = self.timelineConverter.calcPresentationTimeFromWallTime(manifest.mpdLoadedTime, firstPeriod, isDynamic);
+                    mpdDuration = self.timelineConverter.calcPresentationTimeFromWallTime(manifest.mpdLoadedTime, isDynamic);
 
                     if (manifest.hasOwnProperty("minimumUpdatePeriod")) {
                         mpdDuration += manifest.minimumUpdatePeriod;
@@ -483,6 +464,64 @@ Dash.dependencies.DashManifestExtensions.prototype = {
     getRepresentationFor: function (index, data) {
         "use strict";
         return Q.when(data.Representation_asArray[index]);
+    },
+
+    getRepresentationsForAdaptation: function(manifest, adaptation) {
+        var a = manifest.Period_asArray[adaptation.period.index].AdaptationSet_asArray[adaptation.index],
+            representations = [],
+            representation,
+            r;
+
+        for (var i = 0; i < a.Representation_asArray.length; i += 1) {
+            r = a.Representation_asArray[i];
+            representation = new Dash.vo.Representation();
+            representation.index = i;
+            representation.adaptation = adaptation;
+
+            if (r.hasOwnProperty("BaseURL")) {
+                representation.BaseURL = r.BaseURL;
+            }
+            if (r.hasOwnProperty("id")) {
+                representation.id = r.id;
+            }
+            if (r.hasOwnProperty("mimeType")) {
+                representation.mimeType = r.mimeType;
+            }
+            if (r.hasOwnProperty("bandwidth")) {
+                representation.bandwidth = r.bandwidth;
+            }
+
+            if (r.hasOwnProperty("SegmentBase")) {
+                representation.segmentInfo = r.SegmentBase;
+            }
+            else if (r.hasOwnProperty("SegmentList")) {
+                representation.segmentInfo = r.SegmentList;
+            }
+            else if (r.hasOwnProperty("SegmentTemplate")) {
+                representation.segmentInfo = r.SegmentTemplate;
+            } else {
+                representation.segmentInfo = representation.BaseURL;
+            }
+            representations.push(representation);
+        }
+
+        return representations;
+    },
+
+    getAdaptationsForPeriod: function(manifest, period) {
+        var p = manifest.Period_asArray[period.index],
+            adaptations = [],
+            adaptationSet;
+
+        for (var i = 0; i < p.AdaptationSet_asArray.length; i += 1) {
+            adaptationSet = new Dash.vo.AdaptationSet();
+            adaptationSet.index = i;
+            adaptationSet.period = period;
+            adaptationSet.representations = this.getRepresentationsForAdaptation(manifest, adaptationSet);
+            adaptations.push(adaptationSet);
+        }
+
+        return adaptations;
     },
 
     getRegularPeriods: function (manifest) {
@@ -541,6 +580,8 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
                     if (vo !== null){
                         vo.index = i;
+                        vo.manifest = manifest;
+                        vo.adaptations = self.getAdaptationsForPeriod(manifest, vo);
                         periods.push(vo);
                     }
 

@@ -11,16 +11,17 @@
  * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-Dash.vo.Period = function () {
+Dash.vo.Representation = function () {
     "use strict";
     this.id = null;
-    this.index = -1;
-    this.duration = NaN;
-    this.start = NaN;
-    this.manifest = null;
-    this.adaptations = null;
+    this.BaseURL = null;
+    this.bandwidth = null;
+    this.mimeType = null;
+    this.adaptation = null;
+    this.segmentInfo = null;
+    this.segments = null;
 };
 
-Dash.vo.Period.prototype = {
-    constructor: Dash.vo.Period
+Dash.vo.Representation.prototype = {
+    constructor: Dash.vo.Representation
 };

@@ -53,10 +53,11 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, isDynamic, true);
         },
 
-        calcPresentationTimeFromWallTime = function (wallTime, firstPeriodInfo, isDynamic) {
+        calcPresentationTimeFromWallTime = function (wallTime, isDynamic) {
             var suggestedPresentationDelay = 0,
                 periodAvailabilityStartTime = 0,
                 presentationTime = NaN,
+                firstPeriodStart = NaN,
                 manifest  = this.manifestModel.getValue();
 
             if (isDynamic) {
@@ -65,7 +66,9 @@ MediaPlayer.dependencies.TimelineConverter = function () {
                     suggestedPresentationDelay = manifest.suggestedPresentationDelay;
                 }
 
-                periodAvailabilityStartTime = calcAvailabilityTimeFromPresentationTime.call(this, firstPeriodInfo.start - suggestedPresentationDelay, isDynamic);
+                firstPeriodStart = manifest.Period_asArray[0].start;
+
+                periodAvailabilityStartTime = calcAvailabilityTimeFromPresentationTime.call(this, firstPeriodStart - suggestedPresentationDelay, isDynamic);
 
                 presentationTime = (wallTime.getTime() - periodAvailabilityStartTime.getTime()) / 1000;
             }
@@ -73,34 +76,34 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return presentationTime;
         },
 
-        calcPresentationTimeFromMediaTime = function (mediaTime, periodInfo, segmentBase) {
+        calcPresentationTimeFromMediaTime = function (mediaTime, representaion) {
             var fTimescale = 1,
                 presentationOffset = 0;
 
-            if (segmentBase.hasOwnProperty("timescale")) {
-                fTimescale = segmentBase.timescale;
+            if (representaion.segmentInfo.hasOwnProperty("timescale")) {
+                fTimescale = representaion.segmentInfo.timescale;
             }
 
-            if (segmentBase.hasOwnProperty("presentationTimeOffset")) {
-                presentationOffset = segmentBase.presentationTimeOffset / fTimescale;
+            if (representaion.segmentInfo.hasOwnProperty("presentationTimeOffset")) {
+                presentationOffset = representaion.segmentInfo.presentationTimeOffset / fTimescale;
             }
 
-            return (periodInfo.start - presentationOffset) + mediaTime;
+            return (representaion.adaptation.period.start - presentationOffset) + mediaTime;
         },
 
-        calcMediaTimeFromPresentationTime = function (presentationTime, periodInfo, segmentBase) {
+        calcMediaTimeFromPresentationTime = function (presentationTime, representaion) {
             var fTimescale = 1,
                 presentationOffset = 0;
 
-            if (segmentBase.hasOwnProperty("timescale")) {
-                fTimescale = segmentBase.timescale;
+            if (representaion.segmentInfo.hasOwnProperty("timescale")) {
+                fTimescale = representaion.segmentInfo.timescale;
             }
 
-            if (segmentBase.hasOwnProperty("presentationTimeOffset")) {
-                presentationOffset = segmentBase.presentationTimeOffset / fTimescale;
+            if (representaion.segmentInfo.hasOwnProperty("presentationTimeOffset")) {
+                presentationOffset = representaion.segmentInfo.presentationTimeOffset / fTimescale;
             }
 
-            return periodInfo.start + presentationTime + presentationOffset;
+            return representaion.adaptation.period.start + presentationTime + presentationOffset;
         },
 
         calcWallTimeForSegment = function (segment, isDynamic) {
@@ -122,19 +125,19 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return wallTime;
         },
 
-        calcMSETimeOffset = function (periodInfo, segmentBase) {
+        calcMSETimeOffset = function (representaion) {
             var fTimescale = 1,
                 presentationOffset = 0;
 
-            if (segmentBase.hasOwnProperty("timescale")) {
-                fTimescale = segmentBase.timescale;
+            if (representaion.segmentInfo.hasOwnProperty("timescale")) {
+                fTimescale = representaion.segmentInfo.timescale;
             }
 
-            if (segmentBase.hasOwnProperty("presentationTimeOffset")) {
-                presentationOffset = segmentBase.presentationTimeOffset / fTimescale;
+            if (representaion.segmentInfo.hasOwnProperty("presentationTimeOffset")) {
+                presentationOffset = representaion.segmentInfo.presentationTimeOffset / fTimescale;
             }
 
-            return periodInfo.start - presentationOffset;
+            return representaion.adaptation.period.start - presentationOffset;
         };
 
     return {
