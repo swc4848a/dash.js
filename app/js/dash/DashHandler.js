@@ -180,8 +180,6 @@ Dash.dependencies.DashHandler = function () {
             // at this wall clock time, the video element currentTime should be seg.presentationStartTime
             seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
 
-            seg.MSETimeOffset = self.timelineConverter.calcMSETimeOffset(representation);
-
             return seg;
         },
 
@@ -328,8 +326,6 @@ Dash.dependencies.DashHandler = function () {
 
                     // at this wall clock time, the video element currentTime should be seg.presentationStartTime
                     seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
-
-                    seg.MSETimeOffset = self.timelineConverter.calcMSETimeOffset(representation);
 
                     seg.replacementTime = time;
                     url = template.media;

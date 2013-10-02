@@ -189,6 +189,7 @@ MediaPlayer.dependencies.BufferController = function () {
 
                         Q.when(deferredAppend || true).then(
                             function() {
+                                buffer.timestampOffset = representation.MSETimeOffset;
                                 deferredAppend = self.sourceBufferExt.append(buffer, data, self.videoModel);
                                 deferredAppend.then(function (/*appended*/) {
                                     self.debug.log("Append " + type + " complete: " + buffer.buffered.length);

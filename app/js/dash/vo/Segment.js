@@ -33,8 +33,6 @@ Dash.vo.Segment = function () {
     // For dynamic mpd's, this is the wall clock time that the video   
     // element currentTime should be presentationStartTime
     this.wallStartTime = NaN;
-    // Set the source buffer timeOffset to this
-    this.MSETimeOffset = NaN;
 };
 
 Dash.vo.Segment.prototype = {

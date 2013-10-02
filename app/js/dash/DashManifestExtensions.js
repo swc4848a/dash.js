@@ -502,6 +502,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             } else {
                 representation.segmentInfo = representation.BaseURL;
             }
+            representation.MSETimeOffset = this.timelineConverter.calcMSETimeOffset(representation);
             representations.push(representation);
         }
 
