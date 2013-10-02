@@ -14,62 +14,40 @@
 MediaPlayer.dependencies.ManifestUpdater = function () {
     "use strict";
 
-    var refreshDelay = NaN,
-        refreshTimer = null,
-        onRefreshTimer = null,
+    var minBufferTime,
+        estimatedUpdateTime,
 
-        clear = function () {
-            if (refreshTimer !== null) {
-                clearInterval(refreshTimer);
-                refreshTimer = null;
+        checkForUpdate = function() {
+            if (isUpdateRequired.call(this)) {
+                update.call(this);
             }
         },
 
-        start = function () {
-            clear.call(this);
-
-            if (!isNaN(refreshDelay)) {
-                this.debug.log("Refresh manifest in " + refreshDelay + " seconds.");
-                refreshTimer = setInterval(onRefreshTimer.bind(this), refreshDelay * 1000, this);
-            }
+        isUpdateRequired = function() {
+            return ((estimatedUpdateTime - this.videoModel.getCurrentTime()) < minBufferTime);
         },
 
-        update = function () {
+        update = function() {
             var self = this,
-                manifest = self.manifestModel.getValue();
+                manifest = self.manifestModel.getValue(),
+                url = manifest.mpdUrl;
 
-            if (manifest !== undefined && manifest !== null) {
-                self.manifestExt.getRefreshDelay(manifest).then(
-                    function (t) {
-                        refreshDelay = t;
-                        start.call(self);
-                    }
-                );
+            if (manifest.hasOwnProperty("Location")) {
+                url = manifest.Location;
             }
+
+            self.debug.log("Refresh manifest @ " + url);
+
+            self.manifestLoader.load(url).then(
+                function (manifestResult) {
+                    self.manifestModel.setValue(manifestResult);
+                    self.debug.log("Manifest has been refreshed.");
+                    self.debug.log(manifestResult);
+                    self.startUpdating(self.videoModel);
+                    self.system.notify("manifestUpdated");
+                }
+            );
         };
-
-    onRefreshTimer = function () {
-        var self = this,
-            manifest = self.manifestModel.getValue();
-
-        var url = manifest.mpdUrl;
-
-        if (manifest.hasOwnProperty("Location")) {
-            url = manifest.Location;
-        }
-
-        self.debug.log("Refresh manifest @ " + url);
-
-        self.manifestLoader.load(url).then(
-            function (manifestResult) {
-                self.manifestModel.setValue(manifestResult);
-                self.debug.log("Manifest has been refreshed.");
-                self.debug.log(manifestResult);
-                update.call(self);
-                self.system.notify("manifestUpdated");
-            }
-        );
-    };
 
     return {
         debug: undefined,
@@ -77,13 +55,35 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
         manifestModel: undefined,
         manifestExt: undefined,
         manifestLoader: undefined,
+        timelineConverter: undefined,
 
-        setup: function () {
-            update.call(this);
+        setup: function() {
+            checkForUpdate = checkForUpdate.bind(this);
         },
 
-        init: function () {
-            update.call(this);
+        startUpdating: function(videoModel) {
+            var manifest = this.manifestModel.getValue(),
+                minimumUpdatePeriod,
+                mpdLoadedTime;
+
+            if (manifest && manifest.hasOwnProperty("minimumUpdatePeriod") && videoModel) {
+                minimumUpdatePeriod = parseFloat(manifest.minimumUpdatePeriod);
+                minBufferTime = manifest.minBufferTime;
+                mpdLoadedTime = manifest.mpdLoadedTime;
+                estimatedUpdateTime = this.timelineConverter.calcPresentationTimeFromWallTime(mpdLoadedTime, true) + minimumUpdatePeriod;
+                if (videoModel !== this.videoModel) {
+                    this.stopUpdating();
+                    this.videoModel = videoModel;
+                    this.videoModel.listen("timeupdate", checkForUpdate);
+                }
+            }
+        },
+
+        stopUpdating: function() {
+            if (this.videoModel) {
+                this.videoModel.unlisten("timeupdate", checkForUpdate);
+                this.videoModel = null;
+            }
         }
     };
 };

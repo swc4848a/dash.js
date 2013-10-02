@@ -615,7 +615,6 @@ MediaPlayer.dependencies.Stream = function () {
             manifest = manifestResult;
             self.debug.log("Manifest has loaded.");
             self.debug.log(self.manifestModel.getValue());
-            self.manifestUpdater.init();
             return self.mediaSourceExt.createMediaSource().then(
                 function (mediaSourceResult) {
                     mediaSource = mediaSourceResult;
@@ -666,15 +665,17 @@ MediaPlayer.dependencies.Stream = function () {
             this.videoModel.listen("seeked", seekedListener);
         },
 
-        manifestHasUpdated = function () {
+        updateData = function (updatedPeriodInfo) {
             var self = this,
                 videoData,
                 audioData,
                 manifest = self.manifestModel.getValue();
 
+            periodInfo = updatedPeriodInfo;
             self.debug.log("Manifest updated... set new data on buffers.");
 
             if (videoController) {
+                videoController.setPeriodInfo(periodInfo);
                 videoData = videoController.getData();
 
                 if (videoData.hasOwnProperty("id")) {
@@ -693,6 +694,7 @@ MediaPlayer.dependencies.Stream = function () {
             }
 
             if (audioController) {
+                audioController.setPeriodInfo(periodInfo);
                 audioData = audioController.getData();
 
                 if (audioData.hasOwnProperty("id")) {
@@ -715,7 +717,6 @@ MediaPlayer.dependencies.Stream = function () {
         system: undefined,
         videoModel: undefined,
         manifestLoader: undefined,
-        manifestUpdater: undefined,
         manifestModel: undefined,
         mediaSourceExt: undefined,
         sourceBufferExt: undefined,
@@ -734,7 +735,6 @@ MediaPlayer.dependencies.Stream = function () {
         requestScheduler: undefined,
 
         setup: function () {
-            this.system.mapHandler("manifestUpdated", undefined, manifestHasUpdated.bind(this));
             this.system.mapHandler("setCurrentTime", undefined, currentTimeChanged.bind(this));
 
             load = Q.defer();
@@ -821,6 +821,7 @@ MediaPlayer.dependencies.Stream = function () {
         },
 
         initPlayback: initPlayback,
+        updateData: updateData,
         play: play,
         seek: seek,
         pause: pause

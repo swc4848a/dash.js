@@ -445,17 +445,6 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         return Q.when(representation.bandwidth);
     },
 
-    getRefreshDelay: function (manifest) {
-        "use strict";
-        var delay = NaN;
-
-        if (manifest.hasOwnProperty("minimumUpdatePeriod")) {
-            delay = parseFloat(manifest.minimumUpdatePeriod);
-        }
-
-        return Q.when(delay);
-    },
-
     getRepresentationCount: function (adaptation) {
         "use strict";
         return Q.when(adaptation.Representation_asArray.length);
