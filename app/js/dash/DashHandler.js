@@ -157,7 +157,7 @@ Dash.dependencies.DashHandler = function () {
             return Q.when(isFinished);
         },
 
-        segmentFromPresentationTime = function (representation, index, duration, timescale) {
+        getIndexBasedSegment = function (representation, index, duration, timescale) {
             var self = this,
                 seg,
                 presentationStartTime,
@@ -202,7 +202,7 @@ Dash.dependencies.DashHandler = function () {
             for (i = 0, len = list.SegmentURL_asArray.length; i < len; i += 1) {
                 s = list.SegmentURL_asArray[i];
 
-                seg = segmentFromPresentationTime.call(
+                seg = getIndexBasedSegment.call(
                     this,
                     representation,
                     start + i,
@@ -248,7 +248,7 @@ Dash.dependencies.DashHandler = function () {
 
             for (i = 0;i < len; i += 1) {
 
-                seg = segmentFromPresentationTime.call(
+                seg = getIndexBasedSegment.call(
                     this,
                     representation,
                     start + i,
@@ -268,6 +268,40 @@ Dash.dependencies.DashHandler = function () {
             return Q.when(segments);
         },
 
+        getTimeBasedSegment = function(representation, time, duration, fTimescale, url, range, count) {
+            var self = this,
+                endTime,
+                presentationEndTime,
+                seg;
+
+            endTime = time + duration;
+
+            presentationEndTime = self.timelineConverter.calcPresentationTimeFromMediaTime(endTime / fTimescale, representation);
+
+            seg = new Dash.vo.Segment();
+
+            seg.timescale = fTimescale;
+            seg.duration = duration / seg.timescale;
+            seg.mediaStartTime = time / seg.timescale;
+
+            seg.presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(seg.mediaStartTime, representation);
+
+            seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, isDynamic);
+            seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, isDynamic);
+
+            // at this wall clock time, the video element currentTime should be seg.presentationStartTime
+            seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
+
+            seg.replacementTime = time;
+
+            url = replaceNumberForTemplate(url, count);
+            url = replaceTimeForTemplate(url, seg.replacementTime);
+            seg.media = url;
+            seg.mediaRange = range;
+
+            return seg;
+        },
+
         getSegmentsFromTimeline = function (representation) {
             var self = this,
                 template = representation.segmentInfo,
@@ -281,11 +315,8 @@ Dash.dependencies.DashHandler = function () {
                 repeat,
                 seg,
                 time = 0,
-                endTime = 0,
-                presentationEndTime = 0,
                 count = 1,
-                fTimescale = 1,
-                url;
+                fTimescale = 1;
 
             if (template.hasOwnProperty("startNumber")) {
                 count = template.startNumber;
@@ -309,34 +340,20 @@ Dash.dependencies.DashHandler = function () {
                     if (frag.hasOwnProperty("t")) {
                         time = frag.t;
                     }
-                    endTime = time + frag.d;
 
-                    presentationEndTime = self.timelineConverter.calcPresentationTimeFromMediaTime(endTime / fTimescale, representation);
-
-                    seg = new Dash.vo.Segment();
-
-                    seg.timescale = fTimescale;
-                    seg.duration = frag.d / seg.timescale;
-                    seg.mediaStartTime = time / seg.timescale;
-
-                    seg.presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(seg.mediaStartTime, representation);
-
-                    seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, isDynamic);
-                    seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, isDynamic);
-
-                    // at this wall clock time, the video element currentTime should be seg.presentationStartTime
-                    seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
-
-                    seg.replacementTime = time;
-                    url = template.media;
-                    url = replaceNumberForTemplate(url, count);
-                    url = replaceTimeForTemplate(url, seg.replacementTime);
-                    seg.media = url;
+                    seg = getTimeBasedSegment.call(
+                        self,
+                        representation,
+                        time,
+                        frag.d,
+                        fTimescale,
+                        template.media,
+                        frag.mediaRange,
+                        count);
 
                     segments.push(seg);
                     seg = null;
-
-                    time = endTime;
+                    time += frag.d;
                     count += 1;
                 }
             }
@@ -345,14 +362,45 @@ Dash.dependencies.DashHandler = function () {
         },
 
         getSegmentsFromSource = function (representation) {
-            var url = representation.BaseURL,
-                range = null;
+            var self = this,
+                baseURL = representation.BaseURL,
+                deferred = Q.defer(),
+                segments = [],
+                count = 1,
+                range = null,
+                s,
+                i,
+                len,
+                seg;
 
             if (representation.segmentInfo.hasOwnProperty("indexRange")) {
                 range = representation.segmentInfo.indexRange;
             }
 
-            return this.baseURLExt.loadSegments(url, range);
+            this.baseURLExt.loadSegments(baseURL, range).then(
+                function(fragments) {
+                    for (i = 0, len = fragments.length; i < len; i+=1) {
+                        s = fragments[i];
+
+                        seg = getTimeBasedSegment.call(
+                            self,
+                            representation,
+                            s.startTime,
+                            s.duration,
+                            s.timescale,
+                            s.media,
+                            s.mediaRange,
+                            count);
+
+                        segments.push(seg);
+                        seg = null;
+                        count += 1;
+                    }
+                    deferred.resolve(segments);
+                }
+            );
+
+            return deferred.promise;
         },
 
         getSegments = function (representation) {
