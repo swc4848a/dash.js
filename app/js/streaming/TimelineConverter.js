@@ -18,22 +18,22 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             var availabilityTime = NaN,
                 manifest  = this.manifestModel.getValue();
 
-            if (isDynamic) {
-                availabilityTime = new Date(manifest.availabilityStartTime.getTime() + (presentationTime * 1000));
-                //The Segment availability end time of a Media Segment is the sum of
-                // the Segment availability start time, the MPD duration of the Media Segment
-                // and the value of the attribute MPD@timeShiftBufferDepth
-                if (calculateEnd) {
-                    //@timeShiftBufferDepth specifies the duration of the time shifting buffer that is guaranteed
-                    // to be available for a Media Presentation with type 'dynamic'.
-                    // When not present, the value is infinite.
-                    if (manifest.hasOwnProperty("timeShiftBufferDepth")) {
-                        availabilityTime = new Date(availabilityTime.getTime() + manifest.timeShiftBufferDepth * 1000);
-                    } else {
-                        availabilityTime = Number.POSITIVE_INFINITY;
-                    }
+            if (calculateEnd) {
+                if (manifest.hasOwnProperty("availabilityEndTime")) {
+                    availabilityTime = new Date(manifest.availabilityEndTime.getTime());
+                } else
+                //@timeShiftBufferDepth specifies the duration of the time shifting buffer that is guaranteed
+                // to be available for a Media Presentation with type 'dynamic'.
+                // When not present, the value is infinite.
+                if (isDynamic && manifest.hasOwnProperty("timeShiftBufferDepth")) {
+                    availabilityTime = new Date(manifest.availabilityStartTime.getTime() + ((presentationTime + manifest.timeShiftBufferDepth) * 1000));
+                } else  {
+                    availabilityTime = Number.POSITIVE_INFINITY;
                 }
             } else {
+                if (isDynamic) {
+                    availabilityTime = new Date(manifest.availabilityStartTime.getTime() + (presentationTime * 1000));
+                } else
                 // in static mpd, all segments are available at the same time
                 if (manifest.hasOwnProperty("availabilityStartTime")) {
                     availabilityTime = new Date(manifest.availabilityStartTime.getTime());

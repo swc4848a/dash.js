@@ -21,7 +21,29 @@ MediaPlayer.dependencies.FragmentModel = function () {
         startLoadingCallback,
         successLoadingCallback,
         errorLoadingCallback,
+        cancelLoadingCallback,
         streamEndCallback,
+
+        loadCurrentFragment = function() {
+            var now = new Date(),
+                start = currentRequest.availabilityStartTime,
+                end = currentRequest.availabilityEndTime;
+
+            if (now < start) {
+                // The availability start time exceeds the current wall-clock time, we should wait until the fragment is available
+                cancelLoadingCallback.call(context);
+            } else if (now < end) {
+                // We are about to start loading the fragment, so execute the corresponding callback
+                startLoadingCallback.call(context);
+                this.fragmentLoader.load(currentRequest).then(successLoadingCallback.bind(context, currentRequest),
+                    errorLoadingCallback.bind(context, currentRequest));
+            } else {
+                // The current wall-clock time exceeds the availability end time, so the fragment is not available any more, do not schedule it again
+                executedRequests.push(currentRequest);
+                currentRequest = null;
+                cancelLoadingCallback.call(context);
+            }
+        },
 
         removeExecutedRequest = function(request) {
             var idx = executedRequests.indexOf(request);
@@ -48,9 +70,10 @@ MediaPlayer.dependencies.FragmentModel = function () {
             currentRequest = value;
         },
 
-        setCallbacks: function(onLoadingStart, onLoadingSuccess, onLoadingError, onStreamEnd) {
+        setCallbacks: function(onLoadingStart, onLoadingSuccess, onLoadingError, onLoadingCancel, onStreamEnd) {
             startLoadingCallback = onLoadingStart;
             streamEndCallback = onStreamEnd;
+            cancelLoadingCallback = onLoadingCancel;
 
             successLoadingCallback = function(request, response) {
                 if (currentRequest.type.toLowerCase() !== "initialization segment") {
@@ -94,6 +117,23 @@ MediaPlayer.dependencies.FragmentModel = function () {
             return context.isReady();
         },
 
+        getOverdueRequests: function() {
+            var now = new Date(),
+                overdueRequests = [],
+                len = executedRequests.length,
+                endTime,
+                i;
+
+            for (i = 0; i < len; i +=1) {
+                endTime = executedRequests[i].availabilityEndTime;
+                if (now > endTime) {
+                    overdueRequests.push(executedRequests[i]);
+                }
+            }
+
+            return overdueRequests;
+        },
+
         executeCurrentRequest: function() {
             if (!currentRequest) return;
 
@@ -103,10 +143,7 @@ MediaPlayer.dependencies.FragmentModel = function () {
                     streamEndCallback.call(context);
                     break;
                 case "download":
-                    // We are about to start loading the fragment, so execute the corresponding callback
-                    startLoadingCallback.call(context);
-                    this.fragmentLoader.load(currentRequest).then(successLoadingCallback.bind(context, currentRequest),
-                        errorLoadingCallback.bind(context, currentRequest));
+                    loadCurrentFragment.call(this);
                     break;
                 default:
                     this.debug.log("Unknown request action.");

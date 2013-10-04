@@ -152,5 +152,16 @@ MediaPlayer.dependencies.SourceBufferExtensions.prototype = {
             deferred.reject(ex.description);
         }
         return deferred.promise;
+    },
+
+    remove: function (buffer, start, end) {
+        "use strict";
+        var deferred = Q.defer();
+        try {
+            deferred.resolve(buffer.remove(start, end));
+        } catch(ex){
+            deferred.reject(ex.description);
+        }
+        return deferred.promise;
     }
 };

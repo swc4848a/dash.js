@@ -193,16 +193,7 @@ MediaPlayer.dependencies.BufferController = function () {
                                 deferredAppend = self.sourceBufferExt.append(buffer, data, self.videoModel);
                                 deferredAppend.then(function (/*appended*/) {
                                     self.debug.log("Append " + type + " complete: " + buffer.buffered.length);
-                                    if (buffer.buffered.length > 0) {
-                                        var ranges = buffer.buffered,
-                                            i,
-                                            len;
-
-                                        self.debug.log("Number of buffered " + type + " ranges: " + ranges.length);
-                                        for (i = 0, len = ranges.length; i < len; i += 1) {
-                                            self.debug.log("Buffered " + type + " Range: " + ranges.start(i) + " - " + ranges.end(i));
-                                        }
-                                    }
+                                    clearBuffer.call(self);
                                 });
                             }
                         );
@@ -222,6 +213,63 @@ MediaPlayer.dependencies.BufferController = function () {
 
             //alert("Error loading fragment.");
             this.errHandler.downloadError("Error loading " + type + " fragment: " + request.url);
+        },
+
+        onLoadingCancel = function() {
+            // If the canceled request was rejected because it has expired then loadNextFragment
+            // will try load the next one. Otherwise, it will try to load the canceled requset again
+            loadNextFragment.call(this, lastQuality).then(onFragmentRequest.bind(this));
+        },
+
+        clearBuffer = function() {
+            var self = this,
+                deferred = Q.defer(),
+                ranges = buffer.buffered,
+                rangeCount = ranges.length,
+                latestUnavailableRequest,
+                startRemovingPosition,
+                endRemovingPosition,
+                overdueRequests,
+                i;
+
+            // If the buffer is empty then there is nothing to do
+            if (rangeCount === 0) return;
+
+            // Get the requests for the fragments that have already been loaded, but have become unavailable by now
+            overdueRequests = self.fragmentController.getOverdueRequests(self);
+
+            if (overdueRequests && overdueRequests.length > 0) {
+                latestUnavailableRequest = overdueRequests[0];
+                // We need to find the requet with the latest availabilityEndTime
+                for (i = overdueRequests.length-1; i > 0; i -= 1) {
+                    if (overdueRequests[i].availabilityEndTime > latestUnavailableRequest.availabilityEndTime) {
+                        latestUnavailableRequest = overdueRequests[i];
+                    }
+                }
+                // Remove the data from the first buffered range till the presentation end time of the latest unavailable fragment
+                startRemovingPosition = buffer.buffered.start(0);
+                endRemovingPosition = latestUnavailableRequest.startTime + latestUnavailableRequest.duration;
+
+                if (startRemovingPosition < endRemovingPosition) {
+                    self.sourceBufferExt.remove(buffer, startRemovingPosition, endRemovingPosition).then(
+                        function() {
+                            deferred.resolve();
+                        }
+                    );
+                } else {
+                    deferred.resolve();
+                }
+            }
+
+            deferred.promise.then(
+                function() {
+                    rangeCount = ranges.length;
+                    self.debug.log("Number of buffered " + type + " ranges: " + rangeCount);
+                    for (i = 0; i < rangeCount; i += 1) {
+                        self.debug.log("Buffered " + type + " Range: " + ranges.start(i) + " - " + ranges.end(i));
+                    }
+                }
+            )
         },
 
         signalStreamComplete = function () {
@@ -297,7 +345,7 @@ MediaPlayer.dependencies.BufferController = function () {
                     self.indexHandler.getNextSegmentRequest(representation).then(onFragmentRequest.bind(self));
                 } else {
                     self.debug.log("Loading an " + type + " fragment: " + request.url);
-                    self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, signalStreamComplete).then(
+                    self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, onLoadingCancel, signalStreamComplete).then(
                         function() {
                             setState.call(self, READY);
                         }
@@ -494,7 +542,7 @@ MediaPlayer.dependencies.BufferController = function () {
                                         if (request !== null) {
                                             self.debug.log("Loading " + type + " initialization: " + request.url);
                                             self.debug.log(request);
-                                            self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, signalStreamComplete).then(
+                                            self.fragmentController.prepareFragmentForLoading(self, request, onBytesLoadingStart, onBytesLoaded, onBytesError, onLoadingCancel, signalStreamComplete).then(
                                                 function() {
                                                     setState.call(self, READY);
                                                 }

@@ -101,7 +101,7 @@ MediaPlayer.dependencies.FragmentController = function () {
             return isLoaded;
         },
 
-        prepareFragmentForLoading: function(bufferController, request, startLoadingCallback, successLoadingCallback, errorLoadingCallback, streamEndCallback) {
+        prepareFragmentForLoading: function(bufferController, request, startLoadingCallback, successLoadingCallback, errorLoadingCallback, cancelLoadingCallback, streamEndCallback) {
             var fragmentModel = findModel(bufferController);
 
             if (!fragmentModel || !request) {
@@ -109,9 +109,19 @@ MediaPlayer.dependencies.FragmentController = function () {
             }
             // Store the request and all the necessary callbacks in the model for deferred execution
             fragmentModel.setCurrentRequest(request);
-            fragmentModel.setCallbacks(startLoadingCallback, successLoadingCallback, errorLoadingCallback, streamEndCallback);
+            fragmentModel.setCallbacks(startLoadingCallback, successLoadingCallback, errorLoadingCallback, cancelLoadingCallback, streamEndCallback);
 
             return Q.when(true);
+        },
+
+        getOverdueRequests: function(bufferController) {
+            var fragmentModel = findModel(bufferController);
+
+            if (fragmentModel) {
+                return fragmentModel.getOverdueRequests();
+            }
+
+            return null;
         }
     };
 };

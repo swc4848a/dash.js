@@ -53,6 +53,22 @@ Dash.dependencies.DashHandler = function () {
             return url;
         },
 
+        generateInitRequest = function(representation, streamType, url, range) {
+            var self = this,
+                request = new MediaPlayer.vo.SegmentRequest(),
+                presentationStartTime;
+
+            request.streamType = streamType;
+            request.type = "Initialization Segment";
+            request.url = getRequestUrl(url, representation.BaseURL);
+            request.range = range;
+            presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(0, representation);
+            request.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(presentationStartTime, isDynamic);
+            request.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationStartTime, isDynamic);
+
+            return request;
+        },
+
         getInit = function (representation) {
             var deferred = Q.defer(),
                 request = null,
@@ -87,11 +103,7 @@ Dash.dependencies.DashHandler = function () {
                 self.baseURLExt.loadInitialization(url).then(
                     function (theRange) {
                         self.debug.log("Got an initialization.");
-                        request = new MediaPlayer.vo.SegmentRequest();
-                        request.streamType = type;
-                        request.type = "Initialization Segment";
-                        request.url = getRequestUrl(url, representation.BaseURL);
-                        request.range = theRange;
+                        request = generateInitRequest.call(self, representation, type, url, theRange);
                         deferred.resolve(request);
                     },
                     function () {
@@ -103,11 +115,7 @@ Dash.dependencies.DashHandler = function () {
 
             if (initialization && initialization.length > 0) {
                 self.debug.log("Got an initialization.");
-                request = new MediaPlayer.vo.SegmentRequest();
-                request.streamType = type;
-                request.type = "Initialization Segment";
-                request.url = getRequestUrl(initialization, representation.BaseURL);
-                request.range = range;
+                request = generateInitRequest.call(self, representation, type, initialization, range);
                 deferred.resolve(request);
             }
 
@@ -163,7 +171,7 @@ Dash.dependencies.DashHandler = function () {
                 presentationStartTime,
                 presentationEndTime;
 
-            presentationStartTime = (index - 1) * duration;
+            presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(((index - 1) * duration), representation);
             presentationEndTime = self.timelineConverter.calcPresentationTimeFromMediaTime(index * duration, representation);
 
             seg = new Dash.vo.Segment();
@@ -503,6 +511,9 @@ Dash.dependencies.DashHandler = function () {
             request.startTime = segment.presentationStartTime;
             request.duration = segment.duration;
             request.timescale = segment.timescale;
+            request.availabilityStartTime = segment.availabilityStartTime;
+            request.availabilityEndTime = segment.availabilityEndTime;
+            request.wallStartTime = segment.wallStartTime;
 
             return Q.when(request);
         },
