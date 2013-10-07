@@ -669,7 +669,7 @@ Dash.dependencies.DashHandler = function () {
                         bufferedIndex = segments.length - 1;
                     }
 
-                    time = segments[bufferedIndex].presentationTime;
+                    time = segments[bufferedIndex].presentationStartTime;
 
                     deferred.resolve(time);
                 }
