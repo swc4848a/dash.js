@@ -321,12 +321,6 @@
             self.manifestLoader.load(url).then(
                 function(manifest) {
                     self.manifestModel.setValue(manifest);
-                    composeStreams.call(self).then(
-                        function() {
-                            activeStream = streams[0];
-                            attachVideoEvents.call(self, activeStream.getVideoModel());
-                        }
-                    );
                 }
             );
         },

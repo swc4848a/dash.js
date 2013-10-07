@@ -44,7 +44,6 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
                     self.debug.log("Manifest has been refreshed.");
                     self.debug.log(manifestResult);
                     self.startUpdating(self.videoModel);
-                    self.system.notify("manifestUpdated");
                 }
             );
         };
