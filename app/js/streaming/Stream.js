@@ -820,6 +820,10 @@ MediaPlayer.dependencies.Stream = function () {
             return periodInfo.index;
         },
 
+        getId: function() {
+            return periodInfo.id;
+        },
+
         initPlayback: initPlayback,
         updateData: updateData,
         play: play,

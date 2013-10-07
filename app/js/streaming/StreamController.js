@@ -223,25 +223,41 @@
             var self = this,
                 manifest = self.manifestModel.getValue(),
                 deferred = Q.defer(),
+                pLen,
+                sLen,
+                pIdx,
+                sIdx,
+                period,
                 stream;
 
             self.manifestExt.getRegularPeriods(manifest).then(
                 function(periods) {
-                    for (var i = 0, len = periods.length; i < len; i++) {
-                        stream = streams[i];
+                    for (pIdx = 0, pLen = periods.length; pIdx < pLen; pIdx += 1) {
+                        period = periods[pIdx];
+                        for (sIdx = 0, sLen = streams.length; sIdx < sLen; sIdx += 1) {
+                            // If the stream already exists we just need to update the values we got from the updated manifest
+                            if (streams[sIdx].getId() === period.id) {
+                                stream = streams[sIdx];
+                                stream.updateData(period);
+                            }
+                        }
                         // If the Stream object does not exist we probably loaded the manifest the first time or it was
                         // introduced in the updated manifest, so we need to create a new Stream and perform all the initialization operations
                         if (!stream) {
                             stream = self.system.getObject("stream");
-                            stream.setVideoModel(i === 0 ? self.videoModel : createVideoModel.call(self));
+                            stream.setVideoModel(pIdx === 0 ? self.videoModel : createVideoModel.call(self));
                             stream.initProtection();
                             stream.setAutoPlay(autoPlay);
-                            stream.load(manifest, periods[i]);
+                            stream.load(manifest, period);
                             streams.push(stream);
-                        } else {
-                        // If the stream already exists we just need to update the values we got from the updated manifest
-                            stream.updateData(periods[i]);
                         }
+                        stream = null;
+                    }
+
+                    // If the active stream has not been set up yet, let it be the first Stream in the list
+                    if (!activeStream) {
+                        activeStream = streams[0];
+                        attachVideoEvents.call(self, activeStream.getVideoModel());
                     }
                     deferred.resolve();
                 }
