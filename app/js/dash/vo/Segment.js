@@ -18,7 +18,6 @@ Dash.vo.Segment = function () {
     this.mediaRange = null;
     this.media = null;
     this.duration = NaN;
-    this.timescale = NaN;
     // this is the time that should be inserted into the media url
     this.replacementTime = null,
     // This is supposed to match the time encoded in the media Segment
@@ -33,6 +32,7 @@ Dash.vo.Segment = function () {
     // For dynamic mpd's, this is the wall clock time that the video   
     // element currentTime should be presentationStartTime
     this.wallStartTime = NaN;
+    this.representation = null;
 };
 
 Dash.vo.Segment.prototype = {

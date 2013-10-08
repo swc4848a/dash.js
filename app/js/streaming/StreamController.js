@@ -77,7 +77,7 @@
             if (getNextStream()) {
                 videoModel.listen("timeupdate", timeupdateListener);
             }
-            this.manifestUpdater.startUpdating(videoModel);
+            this.manifestUpdater.startUpdating(videoModel, activeStream.getPeriodInfo());
         },
 
         detachVideoEvents = function (videoModel) {
@@ -230,36 +230,40 @@
                 period,
                 stream;
 
-            self.manifestExt.getRegularPeriods(manifest).then(
-                function(periods) {
-                    for (pIdx = 0, pLen = periods.length; pIdx < pLen; pIdx += 1) {
-                        period = periods[pIdx];
-                        for (sIdx = 0, sLen = streams.length; sIdx < sLen; sIdx += 1) {
-                            // If the stream already exists we just need to update the values we got from the updated manifest
-                            if (streams[sIdx].getId() === period.id) {
-                                stream = streams[sIdx];
-                                stream.updateData(period);
+            self.manifestExt.getMpd(manifest).then(
+                function(mpd) {
+                    self.manifestExt.getRegularPeriods(manifest, mpd).then(
+                        function(periods) {
+                            for (pIdx = 0, pLen = periods.length; pIdx < pLen; pIdx += 1) {
+                                period = periods[pIdx];
+                                for (sIdx = 0, sLen = streams.length; sIdx < sLen; sIdx += 1) {
+                                    // If the stream already exists we just need to update the values we got from the updated manifest
+                                    if (streams[sIdx].getId() === period.id) {
+                                        stream = streams[sIdx];
+                                        stream.updateData(period);
+                                    }
+                                }
+                                // If the Stream object does not exist we probably loaded the manifest the first time or it was
+                                // introduced in the updated manifest, so we need to create a new Stream and perform all the initialization operations
+                                if (!stream) {
+                                    stream = self.system.getObject("stream");
+                                    stream.setVideoModel(pIdx === 0 ? self.videoModel : createVideoModel.call(self));
+                                    stream.initProtection();
+                                    stream.setAutoPlay(autoPlay);
+                                    stream.load(manifest, period);
+                                    streams.push(stream);
+                                }
+                                stream = null;
                             }
-                        }
-                        // If the Stream object does not exist we probably loaded the manifest the first time or it was
-                        // introduced in the updated manifest, so we need to create a new Stream and perform all the initialization operations
-                        if (!stream) {
-                            stream = self.system.getObject("stream");
-                            stream.setVideoModel(pIdx === 0 ? self.videoModel : createVideoModel.call(self));
-                            stream.initProtection();
-                            stream.setAutoPlay(autoPlay);
-                            stream.load(manifest, period);
-                            streams.push(stream);
-                        }
-                        stream = null;
-                    }
 
-                    // If the active stream has not been set up yet, let it be the first Stream in the list
-                    if (!activeStream) {
-                        activeStream = streams[0];
-                        attachVideoEvents.call(self, activeStream.getVideoModel());
-                    }
-                    deferred.resolve();
+                            // If the active stream has not been set up yet, let it be the first Stream in the list
+                            if (!activeStream) {
+                                activeStream = streams[0];
+                                attachVideoEvents.call(self, activeStream.getVideoModel());
+                            }
+                            deferred.resolve();
+                        }
+                    );
                 }
             );
 

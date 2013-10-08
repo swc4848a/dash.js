@@ -39,8 +39,10 @@ Dash.dependencies.DashHandler = function () {
             return url.split("$RepresentationID$").join(v);
         },
 
-        getRequestUrl = function (destination, baseURL) {
-            var url;
+        getRequestUrl = function (destination, representation) {
+            var baseURL = representation.adaptation.period.mpd.manifest.Period_asArray[representation.adaptation.period.index].
+                    AdaptationSet_asArray[representation.adaptation.index].Representation_asArray[representation.index].BaseURL,
+                url;
 
             if (destination === baseURL) {
                 url = destination;
@@ -53,18 +55,18 @@ Dash.dependencies.DashHandler = function () {
             return url;
         },
 
-        generateInitRequest = function(representation, streamType, url, range) {
+        generateInitRequest = function(representation, streamType) {
             var self = this,
                 request = new MediaPlayer.vo.SegmentRequest(),
                 presentationStartTime;
 
             request.streamType = streamType;
             request.type = "Initialization Segment";
-            request.url = getRequestUrl(url, representation.BaseURL);
-            request.range = range;
+            request.url = getRequestUrl(representation.initialization, representation);
+            request.range = representation.range;
             presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(0, representation);
-            request.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(presentationStartTime, isDynamic);
-            request.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationStartTime, isDynamic);
+            request.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(presentationStartTime, representation.adaptation.period.mpd, isDynamic);
+            request.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationStartTime, representation.adaptation.period.mpd, isDynamic);
 
             return request;
         },
@@ -72,38 +74,25 @@ Dash.dependencies.DashHandler = function () {
         getInit = function (representation) {
             var deferred = Q.defer(),
                 request = null,
-                initialization = null,
                 url = null,
-                range = null,
                 self = this;
 
             self.debug.log("Getting the initialization request.");
 
-            if (representation.segmentInfo.hasOwnProperty("media")) {
-                if (representation.segmentInfo.hasOwnProperty("initialization")) {
-                    initialization = representation.segmentInfo.initialization;
-                    initialization = replaceBandwidthForTemplate(initialization, representation.bandwidth);
-                    initialization = replaceIDForTemplate(initialization, representation.id);
-                }
-            } else if (representation.segmentInfo.hasOwnProperty("SegmentURL") &&
-                       representation.segmentInfo.hasOwnProperty("Initialization") &&
-                       representation.segmentInfo.Initialization.hasOwnProperty("sourceURL")) {
-                initialization = representation.segmentInfo.Initialization.sourceURL;
-            } else if (representation.segmentInfo.hasOwnProperty("Initialization") &&
-                       representation.segmentInfo.Initialization.hasOwnProperty("range")) {
-                initialization = representation.BaseURL;
-                range = representation.segmentInfo.Initialization.range;
-            } else if (representation.mimeType &&
-                       self.manifestExt.getIsTextTrack(representation.mimeType)) {
-                initialization = representation.BaseURL;
-                range = 0;
+            if (representation.initialization) {
+                self.debug.log("Got an initialization.");
+                request = generateInitRequest.call(self, representation, type);
+                deferred.resolve(request);
             } else {
                 // Go out and find the initialization.
-                url = representation.BaseURL;
+                url = representation.adaptation.period.mpd.manifest.Period_asArray[representation.adaptation.period.index].
+                    AdaptationSet_asArray[representation.adaptation.index].Representation_asArray[representation.index].BaseURL;
                 self.baseURLExt.loadInitialization(url).then(
                     function (theRange) {
                         self.debug.log("Got an initialization.");
-                        request = generateInitRequest.call(self, representation, type, url, theRange);
+                        representation.range = theRange;
+                        representation.initialization = url;
+                        request = generateInitRequest.call(self, representation, type);
                         deferred.resolve(request);
                     },
                     function () {
@@ -113,19 +102,11 @@ Dash.dependencies.DashHandler = function () {
                 );
             }
 
-            if (initialization && initialization.length > 0) {
-                self.debug.log("Got an initialization.");
-                request = generateInitRequest.call(self, representation, type, initialization, range);
-                deferred.resolve(request);
-            }
-
             return deferred.promise;
         },
 
         isMediaFinished = function (representation) { // TODO
             var fDuration,
-                fTimescale,
-                fLength,
                 sDuration,
                 startNumber,
                 idx,
@@ -136,54 +117,39 @@ Dash.dependencies.DashHandler = function () {
                 this.debug.log("Live never ends! (TODO)");
                 // TODO : Check the contents of the last box to signal end.
                 isFinished = false;
-            } else if (representation.segments !== null) {
-                this.debug.log("Segments: " + index + " / " + representation.segments.length);
-                isFinished = (index >= representation.segments.length);
-            } else if (representation.hasOwnProperty("media") && !representation.segmentInfo.hasOwnProperty("SegmentTimeline")) {
-                fTimescale = 1;
-                startNumber = 1;
+            } else {
                 sDuration = Math.floor(representation.adaptation.period.duration); // Disregard fractional seconds.  TODO : Is this ok?  The logic breaks if we don't do this...
-
-                if (representation.segmentInfo.hasOwnProperty("duration")) {
-                    fDuration = representation.segmentInfo.duration;
-
-                    if (representation.segmentInfo.hasOwnProperty("timescale")) {
-                        fTimescale = representation.segmentInfo.timescale;
-                    }
-
-                    if (representation.segmentInfo.hasOwnProperty("startNumber")) {
-                        startNumber = representation.segmentInfo.startNumber;
-                    }
-
-                    fLength = (fDuration / fTimescale);
-                    idx = index - startNumber;
-                    this.debug.log("SegmentTemplate: " + fLength + " * " + idx + " = " + (fLength * idx) + " / " + sDuration);
-                    isFinished = ((fLength * idx) >= sDuration);
-                }
+                fDuration = representation.segmentDuration;
+                startNumber = representation.startNumber;
+                idx = index - startNumber;
+                this.debug.log("SegmentTemplate: " + fDuration + " * " + idx + " = " + (fDuration * idx) + " / " + sDuration);
+                isFinished = ((fDuration * idx) >= sDuration);
             }
 
             return Q.when(isFinished);
         },
 
-        getIndexBasedSegment = function (representation, index, duration, timescale) {
+        getIndexBasedSegment = function (representation, index) {
             var self = this,
                 seg,
+                duration,
                 presentationStartTime,
                 presentationEndTime;
 
+            duration = representation.segmentDuration;
             presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(((index - 1) * duration), representation);
             presentationEndTime = self.timelineConverter.calcPresentationTimeFromMediaTime(index * duration, representation);
 
             seg = new Dash.vo.Segment();
 
-            seg.timescale = timescale;
+            seg.representation = representation;
             seg.duration = duration;
             seg.presentationStartTime = presentationStartTime;
 
             seg.mediaStartTime = self.timelineConverter.calcMediaTimeFromPresentationTime(seg.presentationStartTime, representation);
 
-            seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, isDynamic);
-            seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, isDynamic);
+            seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, representation.adaptation.period.mpd, isDynamic);
+            seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, representation.adaptation.period.mpd, isDynamic);
 
             // at this wall clock time, the video element currentTime should be seg.presentationStartTime
             seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
@@ -193,19 +159,15 @@ Dash.dependencies.DashHandler = function () {
 
         getSegmentsFromList = function (representation) {
             var segments = [],
-                list = representation.segmentInfo,
+                list = representation.adaptation.period.mpd.manifest.Period_asArray[representation.adaptation.period.index].
+                    AdaptationSet_asArray[representation.adaptation.index].Representation_asArray[representation.index].SegmentList,
                 i,
                 len,
                 seg,
                 s,
-                duration,
-                start = 1;
+                start;
 
-            if (list.hasOwnProperty("startNumber")) {
-                start = list.startNumber;
-            }
-
-            duration = list.duration / list.timescale;
+            start = representation.startNumber;
 
             for (i = 0, len = list.SegmentURL_asArray.length; i < len; i += 1) {
                 s = list.SegmentURL_asArray[i];
@@ -213,11 +175,9 @@ Dash.dependencies.DashHandler = function () {
                 seg = getIndexBasedSegment.call(
                     this,
                     representation,
-                    start + i,
-                    duration,
-                    list.timescale);
+                    start + i);
 
-                seg.replacementTime = (start + i - 1) * list.duration;
+                seg.replacementTime = (start + i - 1) * representation.segmentDuration;
                 seg.media = s.media;
                 seg.mediaRange = s.mediaRange;
                 seg.index = s.index;
@@ -232,38 +192,26 @@ Dash.dependencies.DashHandler = function () {
 
         getSegmentsFromTemplate = function (representation) {
             var segments = [],
-                template = representation.segmentInfo,
+                template = representation.adaptation.period.mpd.manifest.Period_asArray[representation.adaptation.period.index].
+                    AdaptationSet_asArray[representation.adaptation.index].Representation_asArray[representation.index].SegmentTemplate,
                 i,
                 len,
                 seg = null,
-                start = 1,
-                duration,
-                fTimescale = 1,
+                start,
                 url = null;
 
-            if (template.hasOwnProperty("startNumber")) {
-                start = template.startNumber;
-            }
+            start = representation.startNumber;
 
-            // default to 1 if not present
-            if (template.hasOwnProperty("timescale")) {
-                fTimescale = template.timescale;
-            }
-
-            duration = template.duration / fTimescale;
-
-            len = representation.adaptation.period.duration / duration;
+            len = representation.adaptation.period.duration / representation.segmentDuration;
 
             for (i = 0;i < len; i += 1) {
 
                 seg = getIndexBasedSegment.call(
                     this,
                     representation,
-                    start + i,
-                    duration,
-                    fTimescale);
+                    start + i);
 
-                seg.replacementTime = (start + i - 1) * template.duration;
+                seg.replacementTime = (start + i - 1) * representation.segmentDuration;
                 url = template.media;
                 url = replaceNumberForTemplate(url, start + i);
                 url = replaceTimeForTemplate(url, seg.replacementTime);
@@ -288,14 +236,14 @@ Dash.dependencies.DashHandler = function () {
 
             seg = new Dash.vo.Segment();
 
-            seg.timescale = fTimescale;
-            seg.duration = duration / seg.timescale;
-            seg.mediaStartTime = time / seg.timescale;
+            seg.representation = representation;
+            seg.duration = duration / fTimescale;
+            seg.mediaStartTime = time / fTimescale;
 
             seg.presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(seg.mediaStartTime, representation);
 
-            seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, isDynamic);
-            seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, isDynamic);
+            seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, representation.adaptation.period.mpd, isDynamic);
+            seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, representation.adaptation.period.mpd, isDynamic);
 
             // at this wall clock time, the video element currentTime should be seg.presentationStartTime
             seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
@@ -312,7 +260,8 @@ Dash.dependencies.DashHandler = function () {
 
         getSegmentsFromTimeline = function (representation) {
             var self = this,
-                template = representation.segmentInfo,
+                template = representation.adaptation.period.mpd.manifest.Period_asArray[representation.adaptation.period.index].
+                    AdaptationSet_asArray[representation.adaptation.index].Representation_asArray[representation.index].SegmentTemplate,
                 timeline = template.SegmentTimeline,
                 segments = [],
                 fragments,
@@ -323,17 +272,12 @@ Dash.dependencies.DashHandler = function () {
                 repeat,
                 seg,
                 time = 0,
-                count = 1,
-                fTimescale = 1;
+                count,
+                fTimescale;
 
-            if (template.hasOwnProperty("startNumber")) {
-                count = template.startNumber;
-            }
+            count = representation.startNumber;
 
-            // default to 1 if not present
-            if (template.hasOwnProperty("timescale")) {
-                fTimescale = template.timescale;
-            }
+            fTimescale = representation.timescale;
 
             fragments = timeline.S_asArray;
             for (i = 0, len = fragments.length; i < len; i += 1) {
@@ -371,7 +315,8 @@ Dash.dependencies.DashHandler = function () {
 
         getSegmentsFromSource = function (representation) {
             var self = this,
-                baseURL = representation.BaseURL,
+                baseURL = representation.adaptation.period.mpd.manifest.Period_asArray[representation.adaptation.period.index].
+                    AdaptationSet_asArray[representation.adaptation.index].Representation_asArray[representation.index].BaseURL,
                 deferred = Q.defer(),
                 segments = [],
                 count = 1,
@@ -381,8 +326,8 @@ Dash.dependencies.DashHandler = function () {
                 len,
                 seg;
 
-            if (representation.segmentInfo.hasOwnProperty("indexRange")) {
-                range = representation.segmentInfo.indexRange;
+            if (representation.indexRange) {
+                range = representation.indexRange;
             }
 
             this.baseURLExt.loadSegments(baseURL, range).then(
@@ -416,14 +361,14 @@ Dash.dependencies.DashHandler = function () {
                 self = this;
 
             // Already figure out the segments.
-            if (representation.segments !== null) {
+            if (representation.segments) {
                 segmentPromise = Q.when(representation.segments);
             } else {
-                if (representation.segmentInfo.hasOwnProperty("SegmentTimeline")) {
+                if (representation.segmentInfoType === "SegmentTimeline") {
                     segmentPromise = getSegmentsFromTimeline.call(self, representation);
-                } else if (representation.segmentInfo.hasOwnProperty("media")) {
+                } else if (representation.segmentInfoType === "SegmentTemplate") {
                     segmentPromise = getSegmentsFromTemplate.call(self, representation);
-                } else if (representation.segmentInfo.hasOwnProperty("SegmentURL")) {
+                } else if (representation.segmentInfoType === "SegmentList") {
                     segmentPromise = getSegmentsFromList.call(self, representation);
                 } else {
                     segmentPromise = getSegmentsFromSource.call(self, representation);
@@ -496,12 +441,14 @@ Dash.dependencies.DashHandler = function () {
             }
 
             var request = new MediaPlayer.vo.SegmentRequest(),
+                bandwidth = representation.adaptation.period.mpd.manifest.Period_asArray[representation.adaptation.period.index].
+                    AdaptationSet_asArray[representation.adaptation.index].Representation_asArray[representation.index].bandwidth,
                 url;
 
-            url = getRequestUrl(segment.media, representation.BaseURL);
+            url = getRequestUrl(segment.media, representation);
             url = replaceNumberForTemplate(url, index + 1);
             url = replaceTimeForTemplate(url, segment.replacementTime);
-            url = replaceBandwidthForTemplate(url, representation.bandwidth);
+            url = replaceBandwidthForTemplate(url, bandwidth);
             url = replaceIDForTemplate(url, representation.id);
 
             request.streamType = type;
@@ -510,7 +457,7 @@ Dash.dependencies.DashHandler = function () {
             request.range = segment.mediaRange;
             request.startTime = segment.presentationStartTime;
             request.duration = segment.duration;
-            request.timescale = segment.timescale;
+            request.timescale = representation.timescale;
             request.availabilityStartTime = segment.availabilityStartTime;
             request.availabilityEndTime = segment.availabilityEndTime;
             request.wallStartTime = segment.wallStartTime;

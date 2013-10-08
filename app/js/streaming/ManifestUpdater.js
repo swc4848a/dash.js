@@ -60,7 +60,7 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
             checkForUpdate = checkForUpdate.bind(this);
         },
 
-        startUpdating: function(videoModel) {
+        startUpdating: function(videoModel, period) {
             var manifest = this.manifestModel.getValue(),
                 minimumUpdatePeriod,
                 mpdLoadedTime;
@@ -69,7 +69,7 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
                 minimumUpdatePeriod = parseFloat(manifest.minimumUpdatePeriod);
                 minBufferTime = manifest.minBufferTime;
                 mpdLoadedTime = manifest.mpdLoadedTime;
-                estimatedUpdateTime = this.timelineConverter.calcPresentationTimeFromWallTime(mpdLoadedTime, true) + minimumUpdatePeriod;
+                estimatedUpdateTime = this.timelineConverter.calcPresentationTimeFromWallTime(mpdLoadedTime, period.mpd, true) + minimumUpdatePeriod;
                 if (videoModel !== this.videoModel) {
                     this.stopUpdating();
                     this.videoModel = videoModel;

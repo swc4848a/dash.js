@@ -298,7 +298,7 @@ MediaPlayer.dependencies.Stream = function () {
 
             // Figure out some bits about the stream before building anything.
             self.debug.log("Gathering information for buffers. (1)");
-            self.manifestExt.getDuration(manifest).then(
+            self.manifestExt.getDuration(manifest, periodInfo).then(
                 function (/*duration*/) {
 
                     self.debug.log("Gathering information for buffers. (2)");
@@ -494,7 +494,7 @@ MediaPlayer.dependencies.Stream = function () {
 
             self.debug.log("Getting ready for playback...");
 
-            self.manifestExt.getDuration(self.manifestModel.getValue()).then(
+            self.manifestExt.getDuration(self.manifestModel.getValue(), periodInfo).then(
                 function (duration) {
                     self.debug.log("Setting duration: " + duration);
                     return self.mediaSourceExt.setDuration(mediaSource, duration);
@@ -822,6 +822,10 @@ MediaPlayer.dependencies.Stream = function () {
 
         getId: function() {
             return periodInfo.id;
+        },
+
+        getPeriodInfo: function() {
+            return periodInfo;
         },
 
         initPlayback: initPlayback,

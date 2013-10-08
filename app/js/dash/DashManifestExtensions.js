@@ -416,16 +416,15 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         return Q.when(isOnDemand);
     },
 
-    getDuration: function (manifest) {
+    getDuration: function (manifest, period) {
         var mpdDuration,
             self = this,
-            firstPeriod,
             deferred = Q.defer();
 
         self.getIsDynamic(manifest).then(
             function(isDynamic) {
                 if (isDynamic) {
-                    mpdDuration = self.timelineConverter.calcPresentationTimeFromWallTime(manifest.mpdLoadedTime, isDynamic);
+                    mpdDuration = self.timelineConverter.calcPresentationTimeFromWallTime(manifest.mpdLoadedTime, period.mpd, isDynamic);
 
                     if (manifest.hasOwnProperty("minimumUpdatePeriod")) {
                         mpdDuration += manifest.minimumUpdatePeriod;
@@ -459,6 +458,8 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         var a = manifest.Period_asArray[adaptation.period.index].AdaptationSet_asArray[adaptation.index],
             representations = [],
             representation,
+            initialization,
+            segmentInfo,
             r;
 
         for (var i = 0; i < a.Representation_asArray.length; i += 1) {
@@ -467,35 +468,70 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             representation.index = i;
             representation.adaptation = adaptation;
 
-            if (r.hasOwnProperty("BaseURL")) {
-                representation.BaseURL = r.BaseURL;
-            }
             if (r.hasOwnProperty("id")) {
                 representation.id = r.id;
             }
-            if (r.hasOwnProperty("mimeType")) {
-                representation.mimeType = r.mimeType;
-            }
-            if (r.hasOwnProperty("bandwidth")) {
-                representation.bandwidth = r.bandwidth;
-            }
 
             if (r.hasOwnProperty("SegmentBase")) {
-                representation.segmentInfo = r.SegmentBase;
+                segmentInfo = r.SegmentBase;
+                representation.segmentInfoType = "SegmentBase";
             }
             else if (r.hasOwnProperty("SegmentList")) {
-                representation.segmentInfo = r.SegmentList;
+                segmentInfo = r.SegmentList;
+                representation.segmentInfoType = "SegmentList";
             }
             else if (r.hasOwnProperty("SegmentTemplate")) {
-                representation.segmentInfo = r.SegmentTemplate;
+                segmentInfo = r.SegmentTemplate;
+
+                if (segmentInfo.hasOwnProperty("SegmentTimeline")) {
+                    representation.segmentInfoType = "SegmentTimeline";
+                } else {
+                    representation.segmentInfoType = "SegmentTemplate";
+                }
+
+                if (segmentInfo.hasOwnProperty("initialization")) {
+                    representation.initialization = segmentInfo.initialization.split("$Bandwidth$")
+                        .join(r.bandwidth).split("$RepresentationID$").join(r.id);
+                }
             } else {
-                representation.segmentInfo = representation.BaseURL;
+                segmentInfo = r.BaseURL;
+                representation.segmentInfoType = "BaseURL";
             }
+
+            if (segmentInfo.hasOwnProperty("Initialization")) {
+                initialization = segmentInfo.Initialization;
+                if (initialization.hasOwnProperty("sourceURL")) {
+                    representation.initialization = initialization.sourceURL;
+                } else if (initialization.hasOwnProperty("range")) {
+                    representation.initialization = r.BaseURL;
+                    representation.range = initialization.range;
+                }
+            } else if (r.hasOwnProperty("mimeType") && this.getIsTextTrack(r.mimeType)) {
+                representation.initialization = r.BaseURL;
+                representation.range = 0;
+            }
+
+            if (segmentInfo.hasOwnProperty("timescale")) {
+                representation.timescale = segmentInfo.timescale;
+            }
+            if (segmentInfo.hasOwnProperty("duration")) {
+                representation.segmentDuration = segmentInfo.duration / representation.timescale;
+            }
+            if (segmentInfo.hasOwnProperty("startNumber")) {
+                representation.startNumber = segmentInfo.startNumber;
+            }
+            if (segmentInfo.hasOwnProperty("indexRange")) {
+                representation.indexRange = segmentInfo.indexRange;
+            }
+            if (segmentInfo.hasOwnProperty("presentationTimeOffset")) {
+                representation.presentationTimeOffset = segmentInfo.presentationTimeOffset / representation.timescale;
+            }
+
             representation.MSETimeOffset = this.timelineConverter.calcMSETimeOffset(representation);
             representations.push(representation);
         }
 
-        return representations;
+        return Q.when(representations);
     },
 
     getAdaptationsForPeriod: function(manifest, period) {
@@ -507,14 +543,13 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             adaptationSet = new Dash.vo.AdaptationSet();
             adaptationSet.index = i;
             adaptationSet.period = period;
-            adaptationSet.representations = this.getRepresentationsForAdaptation(manifest, adaptationSet);
             adaptations.push(adaptationSet);
         }
 
-        return adaptations;
+        return Q.when(adaptations);
     },
 
-    getRegularPeriods: function (manifest) {
+    getRegularPeriods: function (manifest, mpd) {
         var self = this,
             deferred = Q.defer(),
             periods = [],
@@ -570,8 +605,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
                     if (vo !== null){
                         vo.index = i;
-                        vo.manifest = manifest;
-                        vo.adaptations = self.getAdaptationsForPeriod(manifest, vo);
+                        vo.mpd = mpd;
                         periods.push(vo);
                     }
 
@@ -584,7 +618,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
                 // The difference between the PeriodStart time of the last Period
                 // and the mpd duration
                 if (vo1 !== null && isNaN(vo1.duration)) {
-                    self.getDuration(manifest).then(
+                    self.getDuration(manifest, vo1).then(
                         function(mpdDuration) {
                             vo1.duration = mpdDuration - vo1.start;
                             deferred.resolve(periods);
@@ -597,5 +631,42 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         );
 
         return Q.when(deferred.promise);
+    },
+
+    getMpd: function(manifest) {
+        var self = this,
+            deferred = Q.defer(),
+            mpd = new Dash.vo.Mpd();
+
+        mpd.manifest = manifest;
+
+        if (manifest.hasOwnProperty("availabilityStartTime")) {
+            mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime());
+        } else {
+            mpd.availabilityStartTime = new Date(manifest.mpdLoadedTime.getTime());
+        }
+
+        if (manifest.hasOwnProperty("availabilityEndTime")) {
+            mpd.availabilityEndTime = new Date(manifest.availabilityEndTime.getTime());
+        }
+
+        if (manifest.hasOwnProperty("suggestedPresentationDelay")) {
+            mpd.suggestedPresentationDelay = manifest.suggestedPresentationDelay;
+        }
+
+        if (manifest.hasOwnProperty("timeShiftBufferDepth")) {
+            mpd.timeShiftBufferDepth = manifest.timeShiftBufferDepth;
+        }
+
+        self.getIsDynamic(manifest).then(
+            function(isDynamic) {
+                if (isDynamic) {
+                    mpd.periodAvailabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(manifest.Period_asArray[0].start - mpd.suggestedPresentationDelay, mpd, isDynamic);
+                }
+                deferred.resolve(mpd);
+            }
+        )
+
+        return deferred.promise;
     }
 };

@@ -17,8 +17,7 @@ Dash.vo.Period = function () {
     this.index = -1;
     this.duration = NaN;
     this.start = NaN;
-    this.manifest = null;
-    this.adaptations = null;
+    this.mpd = null;
 };
 
 Dash.vo.Period.prototype = {

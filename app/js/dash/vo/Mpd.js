@@ -11,23 +11,15 @@
  * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-Dash.vo.Representation = function () {
+Dash.vo.Mpd = function () {
     "use strict";
-    this.id = null;
-    this.index = -1;
-    this.adaptation = null;
-    this.segmentInfoType = null;
-    this.initialization = null;
-    this.segmentDuration = NaN;
-    this.timescale = 1;
-    this.startNumber = 1;
-    this.indexRange = null;
-    this.range = null;
-    this.presentationTimeOffset = 0;
-    // Set the source buffer timeOffset to this
-    this.MSETimeOffset = NaN;
+    this.manifest = null;
+    this.suggestedPresentationDelay = 0;
+    this.availabilityStartTime = null;
+    this.availabilityEndTime = Number.POSITIVE_INFINITY;
+    this.timeShiftBufferDepth = Number.POSITIVE_INFINITY;
 };
 
-Dash.vo.Representation.prototype = {
-    constructor: Dash.vo.Representation
+Dash.vo.Mpd.prototype = {
+    constructor: Dash.vo.Mpd
 };

@@ -14,111 +14,71 @@
 MediaPlayer.dependencies.TimelineConverter = function () {
     "use strict";
 
-    var calcAvailabilityTimeFromPresentationTime = function (presentationTime, isDynamic, calculateEnd) {
-            var availabilityTime = NaN,
-                manifest  = this.manifestModel.getValue();
+    var calcAvailabilityTimeFromPresentationTime = function (presentationTime, mpd, isDynamic, calculateEnd) {
+            var availabilityTime = NaN;
 
             if (calculateEnd) {
-                if (manifest.hasOwnProperty("availabilityEndTime")) {
-                    availabilityTime = new Date(manifest.availabilityEndTime.getTime());
-                } else
                 //@timeShiftBufferDepth specifies the duration of the time shifting buffer that is guaranteed
                 // to be available for a Media Presentation with type 'dynamic'.
                 // When not present, the value is infinite.
-                if (isDynamic && manifest.hasOwnProperty("timeShiftBufferDepth")) {
-                    availabilityTime = new Date(manifest.availabilityStartTime.getTime() + ((presentationTime + manifest.timeShiftBufferDepth) * 1000));
-                } else  {
-                    availabilityTime = Number.POSITIVE_INFINITY;
+                if (isDynamic) {
+                    availabilityTime = new Date(mpd.availabilityStartTime.getTime() + ((presentationTime + mpd.timeShiftBufferDepth) * 1000));
+                } else {
+                    availabilityTime = mpd.availabilityEndTime;
                 }
             } else {
                 if (isDynamic) {
-                    availabilityTime = new Date(manifest.availabilityStartTime.getTime() + (presentationTime * 1000));
-                } else
-                // in static mpd, all segments are available at the same time
-                if (manifest.hasOwnProperty("availabilityStartTime")) {
-                    availabilityTime = new Date(manifest.availabilityStartTime.getTime());
+                    availabilityTime = new Date(mpd.availabilityStartTime.getTime() + (presentationTime * 1000));
                 } else {
-                    availabilityTime = new Date(manifest.mpdLoadedTime.getTime());
+                // in static mpd, all segments are available at the same time
+                    availabilityTime = mpd.availabilityStartTime;
                 }
+
             }
 
             return availabilityTime;
         },
 
-        calcAvailabilityStartTimeFromPresentationTime = function(presentationTime, isDynamic) {
-            return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, isDynamic);
+        calcAvailabilityStartTimeFromPresentationTime = function(presentationTime, mpd, isDynamic) {
+            return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, mpd, isDynamic);
         },
 
-        calcAvailabilityEndTimeFromPresentationTime = function (presentationTime, isDynamic) {
-            return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, isDynamic, true);
+        calcAvailabilityEndTimeFromPresentationTime = function (presentationTime, mpd, isDynamic) {
+            return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, mpd, isDynamic, true);
         },
 
-        calcPresentationTimeFromWallTime = function (wallTime, isDynamic) {
-            var suggestedPresentationDelay = 0,
-                periodAvailabilityStartTime = 0,
-                presentationTime = NaN,
-                firstPeriodStart = NaN,
-                manifest  = this.manifestModel.getValue();
+        calcPresentationTimeFromWallTime = function (wallTime, mpd, isDynamic) {
+            var presentationTime = NaN;
 
             if (isDynamic) {
-
-                if (manifest.hasOwnProperty("suggestedPresentationDelay")) {
-                    suggestedPresentationDelay = manifest.suggestedPresentationDelay;
-                }
-
-                firstPeriodStart = manifest.Period_asArray[0].start;
-
-                periodAvailabilityStartTime = calcAvailabilityTimeFromPresentationTime.call(this, firstPeriodStart - suggestedPresentationDelay, isDynamic);
-
-                presentationTime = (wallTime.getTime() - periodAvailabilityStartTime.getTime()) / 1000;
+                presentationTime = (wallTime.getTime() - mpd.periodAvailabilityStartTime.getTime()) / 1000;
             }
 
             return presentationTime;
         },
 
         calcPresentationTimeFromMediaTime = function (mediaTime, representaion) {
-            var fTimescale = 1,
-                presentationOffset = 0;
+            var periodStart = representaion.adaptation.period.start,
+                presentationOffset = representaion.presentationTimeOffset;
 
-            if (representaion.segmentInfo.hasOwnProperty("timescale")) {
-                fTimescale = representaion.segmentInfo.timescale;
-            }
-
-            if (representaion.segmentInfo.hasOwnProperty("presentationTimeOffset")) {
-                presentationOffset = representaion.segmentInfo.presentationTimeOffset / fTimescale;
-            }
-
-            return (representaion.adaptation.period.start - presentationOffset) + mediaTime;
+            return (periodStart - presentationOffset) + mediaTime;
         },
 
         calcMediaTimeFromPresentationTime = function (presentationTime, representaion) {
-            var fTimescale = 1,
-                presentationOffset = 0;
+            var periodStart = representaion.adaptation.period.start,
+                presentationOffset = representaion.presentationTimeOffset;
 
-            if (representaion.segmentInfo.hasOwnProperty("timescale")) {
-                fTimescale = representaion.segmentInfo.timescale;
-            }
-
-            if (representaion.segmentInfo.hasOwnProperty("presentationTimeOffset")) {
-                presentationOffset = representaion.segmentInfo.presentationTimeOffset / fTimescale;
-            }
-
-            return representaion.adaptation.period.start + presentationTime + presentationOffset;
+            return (periodStart + presentationOffset + presentationTime);
         },
 
         calcWallTimeForSegment = function (segment, isDynamic) {
-            var suggestedPresentationDelay = 0,
-                displayStartTime = 0,
-                wallTime = null,
-                manifest  = this.manifestModel.getValue();
+            var suggestedPresentationDelay,
+                displayStartTime,
+                wallTime;
 
             if (isDynamic) {
-                if (manifest.hasOwnProperty("suggestedPresentationDelay")) {
-                    suggestedPresentationDelay = manifest.suggestedPresentationDelay;
-                }
-
+                suggestedPresentationDelay = segment.representation.adaptation.period.mpd.suggestedPresentationDelay;
                 displayStartTime = segment.presentationStartTime + suggestedPresentationDelay;
-
                 wallTime = new Date(segment.availabilityStartTime.getTime() + (displayStartTime * 1000));
             }
 
@@ -126,24 +86,15 @@ MediaPlayer.dependencies.TimelineConverter = function () {
         },
 
         calcMSETimeOffset = function (representaion) {
-            var fTimescale = 1,
-                presentationOffset = 0;
+            var periodStart = representaion.adaptation.period.start,
+                presentationOffset = representaion.presentationTimeOffset;
 
-            if (representaion.segmentInfo.hasOwnProperty("timescale")) {
-                fTimescale = representaion.segmentInfo.timescale;
-            }
-
-            if (representaion.segmentInfo.hasOwnProperty("presentationTimeOffset")) {
-                presentationOffset = representaion.segmentInfo.presentationTimeOffset / fTimescale;
-            }
-
-            return representaion.adaptation.period.start - presentationOffset;
+            return (periodStart - presentationOffset);
         };
 
     return {
         system: undefined,
         debug: undefined,
-        manifestModel: undefined,
 
         calcAvailabilityStartTimeFromPresentationTime: calcAvailabilityStartTimeFromPresentationTime,
         calcAvailabilityEndTimeFromPresentationTime: calcAvailabilityEndTimeFromPresentationTime,
