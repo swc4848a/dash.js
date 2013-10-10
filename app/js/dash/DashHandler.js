@@ -40,14 +40,7 @@ Dash.dependencies.DashHandler = function () {
         },
 
         getNumberForSegment = function(segment, segmentIndex) {
-            var startNumberOffsetIndex = segment.representation.startNumber + segmentIndex,
-                presentationStartTime = segment.representation.presentationStartTime,
-                segDuration = segment.duration,
-                number;
-
-            number = Math.floor(presentationStartTime / segDuration) + startNumberOffsetIndex;
-
-            return number;
+            return segment.representation.startNumber + segmentIndex;
         },
 
         getRequestUrl = function (destination, representation) {
@@ -68,16 +61,19 @@ Dash.dependencies.DashHandler = function () {
 
         generateInitRequest = function(representation, streamType) {
             var self = this,
+                period,
                 request = new MediaPlayer.vo.SegmentRequest(),
                 presentationStartTime;
+
+            period = representation.adaptation.period;
 
             request.streamType = streamType;
             request.type = "Initialization Segment";
             request.url = getRequestUrl(representation.initialization, representation);
             request.range = representation.range;
-            presentationStartTime = representation.presentationStartTime;
+            presentationStartTime = period.start;
             request.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(presentationStartTime, representation.adaptation.period.mpd, isDynamic);
-            request.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationStartTime, representation.adaptation.period.mpd, isDynamic);
+            request.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationStartTime + period.duration, period.mpd, isDynamic);
 
             return request;
         },
@@ -148,7 +144,7 @@ Dash.dependencies.DashHandler = function () {
                 presentationEndTime;
 
             duration = representation.segmentDuration;
-            presentationStartTime = representation.presentationStartTime + (index * duration);
+            presentationStartTime = representation.adaptation.period.start + (index * duration);
             presentationEndTime = presentationStartTime + duration;
 
             seg = new Dash.vo.Segment();
@@ -245,7 +241,7 @@ Dash.dependencies.DashHandler = function () {
                 presentationEndTime,
                 seg;
 
-            presentationStartTime = representation.presentationStartTime +  self.timelineConverter.calcPresentationTimeFromMediaTime(scaledTime, representation);
+            presentationStartTime = representation.adaptation.period.start +  self.timelineConverter.calcPresentationTimeFromMediaTime(scaledTime, representation);
             presentationEndTime = presentationStartTime + scaledDuration;
 
             seg = new Dash.vo.Segment();

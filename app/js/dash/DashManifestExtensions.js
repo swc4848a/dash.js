@@ -531,8 +531,6 @@ Dash.dependencies.DashManifestExtensions.prototype = {
                         representation.presentationTimeOffset = segmentInfo.presentationTimeOffset / representation.timescale;
                     }
 
-                    representation.presentationStartTime = self.timelineConverter.calcPresentationStartTime(representation, isDynamic);
-
                     representation.MSETimeOffset = self.timelineConverter.calcMSETimeOffset(representation);
                     representations.push(representation);
                 }
