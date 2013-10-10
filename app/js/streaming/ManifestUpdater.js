@@ -15,6 +15,7 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
     "use strict";
 
     var minBufferTime,
+        period,
         estimatedUpdateTime,
 
         checkForUpdate = function() {
@@ -43,7 +44,7 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
                     self.manifestModel.setValue(manifestResult);
                     self.debug.log("Manifest has been refreshed.");
                     self.debug.log(manifestResult);
-                    self.startUpdating(self.videoModel);
+                    self.startUpdating(self.videoModel, period);
                 }
             );
         };
@@ -60,10 +61,12 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
             checkForUpdate = checkForUpdate.bind(this);
         },
 
-        startUpdating: function(videoModel, period) {
+        startUpdating: function(videoModel, periodInfo) {
             var manifest = this.manifestModel.getValue(),
                 minimumUpdatePeriod,
                 mpdLoadedTime;
+
+            period = periodInfo;
 
             if (manifest && manifest.hasOwnProperty("minimumUpdatePeriod") && videoModel) {
                 minimumUpdatePeriod = parseFloat(manifest.minimumUpdatePeriod);
