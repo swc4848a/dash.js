@@ -21,7 +21,7 @@ MediaPlayer.dependencies.TimelineConverter = function () {
                 //@timeShiftBufferDepth specifies the duration of the time shifting buffer that is guaranteed
                 // to be available for a Media Presentation with type 'dynamic'.
                 // When not present, the value is infinite.
-                if (isDynamic) {
+                if (isDynamic && mpd.timeShiftBufferDepth) {
                     availabilityTime = new Date(mpd.availabilityStartTime.getTime() + ((presentationTime + mpd.timeShiftBufferDepth) * 1000));
                 } else {
                     availabilityTime = mpd.availabilityEndTime;
@@ -33,7 +33,6 @@ MediaPlayer.dependencies.TimelineConverter = function () {
                 // in static mpd, all segments are available at the same time
                     availabilityTime = mpd.availabilityStartTime;
                 }
-
             }
 
             return availabilityTime;
@@ -47,26 +46,36 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, mpd, isDynamic, true);
         },
 
-        calcPresentationTimeFromWallTime = function (wallTime, mpd, isDynamic) {
-            var presentationTime = NaN;
+        calcPresentationStartTime = function (representation, isDynamic) {
+            var now = new Date(),
+                presentationStartTime;
 
             if (isDynamic) {
-                presentationTime = (wallTime.getTime() - mpd.periodAvailabilityStartTime.getTime()) / 1000;
+                presentationStartTime = calcPresentationTimeFromWallTime.call(this, now, representation.adaptation.period, isDynamic);
+            } else {
+                presentationStartTime = calcPresentationTimeFromMediaTime(0, representation);
             }
 
-            return presentationTime;
+            return presentationStartTime;
         },
 
-        calcPresentationTimeFromMediaTime = function (mediaTime, representaion) {
-            var periodStart = representaion.adaptation.period.start,
-                presentationOffset = representaion.presentationTimeOffset;
+        calcPresentationTimeFromWallTime = function (wallTime, period, isDynamic) {
+            var periodAvailabilityStartTime = calcAvailabilityStartTimeFromPresentationTime.call(this, period.start, period.mpd, isDynamic),
+                suggestedPresentationDelay = period.mpd.suggestedPresentationDelay * 1000;
+
+            return ((wallTime.getTime() - periodAvailabilityStartTime.getTime() - suggestedPresentationDelay) / 1000);
+        },
+
+        calcPresentationTimeFromMediaTime = function (mediaTime, representation) {
+            var periodStart = representation.adaptation.period.start,
+                presentationOffset = representation.presentationTimeOffset;
 
             return (periodStart - presentationOffset) + mediaTime;
         },
 
-        calcMediaTimeFromPresentationTime = function (presentationTime, representaion) {
-            var periodStart = representaion.adaptation.period.start,
-                presentationOffset = representaion.presentationTimeOffset;
+        calcMediaTimeFromPresentationTime = function (presentationTime, representation) {
+            var periodStart = representation.adaptation.period.start,
+                presentationOffset = representation.presentationTimeOffset;
 
             return (periodStart + presentationOffset + presentationTime);
         },
@@ -85,9 +94,9 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return wallTime;
         },
 
-        calcMSETimeOffset = function (representaion) {
-            var periodStart = representaion.adaptation.period.start,
-                presentationOffset = representaion.presentationTimeOffset;
+        calcMSETimeOffset = function (representation) {
+            var periodStart = representation.adaptation.period.start,
+                presentationOffset = representation.presentationTimeOffset;
 
             return (periodStart - presentationOffset);
         };
@@ -100,6 +109,7 @@ MediaPlayer.dependencies.TimelineConverter = function () {
         calcAvailabilityEndTimeFromPresentationTime: calcAvailabilityEndTimeFromPresentationTime,
         calcPresentationTimeFromWallTime: calcPresentationTimeFromWallTime,
         calcPresentationTimeFromMediaTime: calcPresentationTimeFromMediaTime,
+        calcPresentationStartTime: calcPresentationStartTime,
         calcMediaTimeFromPresentationTime: calcMediaTimeFromPresentationTime,
         calcWallTimeForSegment: calcWallTimeForSegment,
         calcMSETimeOffset: calcMSETimeOffset

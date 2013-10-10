@@ -424,7 +424,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
         self.getIsDynamic(manifest).then(
             function(isDynamic) {
                 if (isDynamic) {
-                    mpdDuration = self.timelineConverter.calcPresentationTimeFromWallTime(manifest.mpdLoadedTime, period.mpd, isDynamic);
+                    mpdDuration = self.timelineConverter.calcPresentationTimeFromWallTime(manifest.mpdLoadedTime, period, isDynamic);
 
                     if (manifest.hasOwnProperty("minimumUpdatePeriod")) {
                         mpdDuration += manifest.minimumUpdatePeriod;
@@ -456,82 +456,92 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
     getRepresentationsForAdaptation: function(manifest, adaptation) {
         var a = manifest.Period_asArray[adaptation.period.index].AdaptationSet_asArray[adaptation.index],
+            self = this,
             representations = [],
+            deferred = Q.defer(),
             representation,
             initialization,
             segmentInfo,
             r;
 
-        for (var i = 0; i < a.Representation_asArray.length; i += 1) {
-            r = a.Representation_asArray[i];
-            representation = new Dash.vo.Representation();
-            representation.index = i;
-            representation.adaptation = adaptation;
+        self.getIsDynamic(manifest).then(
+            function(isDynamic) {
+                for (var i = 0; i < a.Representation_asArray.length; i += 1) {
+                    r = a.Representation_asArray[i];
+                    representation = new Dash.vo.Representation();
+                    representation.index = i;
+                    representation.adaptation = adaptation;
 
-            if (r.hasOwnProperty("id")) {
-                representation.id = r.id;
-            }
+                    if (r.hasOwnProperty("id")) {
+                        representation.id = r.id;
+                    }
 
-            if (r.hasOwnProperty("SegmentBase")) {
-                segmentInfo = r.SegmentBase;
-                representation.segmentInfoType = "SegmentBase";
-            }
-            else if (r.hasOwnProperty("SegmentList")) {
-                segmentInfo = r.SegmentList;
-                representation.segmentInfoType = "SegmentList";
-            }
-            else if (r.hasOwnProperty("SegmentTemplate")) {
-                segmentInfo = r.SegmentTemplate;
+                    if (r.hasOwnProperty("SegmentBase")) {
+                        segmentInfo = r.SegmentBase;
+                        representation.segmentInfoType = "SegmentBase";
+                    }
+                    else if (r.hasOwnProperty("SegmentList")) {
+                        segmentInfo = r.SegmentList;
+                        representation.segmentInfoType = "SegmentList";
+                    }
+                    else if (r.hasOwnProperty("SegmentTemplate")) {
+                        segmentInfo = r.SegmentTemplate;
 
-                if (segmentInfo.hasOwnProperty("SegmentTimeline")) {
-                    representation.segmentInfoType = "SegmentTimeline";
-                } else {
-                    representation.segmentInfoType = "SegmentTemplate";
+                        if (segmentInfo.hasOwnProperty("SegmentTimeline")) {
+                            representation.segmentInfoType = "SegmentTimeline";
+                        } else {
+                            representation.segmentInfoType = "SegmentTemplate";
+                        }
+
+                        if (segmentInfo.hasOwnProperty("initialization")) {
+                            representation.initialization = segmentInfo.initialization.split("$Bandwidth$")
+                                .join(r.bandwidth).split("$RepresentationID$").join(r.id);
+                        }
+                    } else {
+                        segmentInfo = r.BaseURL;
+                        representation.segmentInfoType = "BaseURL";
+                    }
+
+                    if (segmentInfo.hasOwnProperty("Initialization")) {
+                        initialization = segmentInfo.Initialization;
+                        if (initialization.hasOwnProperty("sourceURL")) {
+                            representation.initialization = initialization.sourceURL;
+                        } else if (initialization.hasOwnProperty("range")) {
+                            representation.initialization = r.BaseURL;
+                            representation.range = initialization.range;
+                        }
+                    } else if (r.hasOwnProperty("mimeType") && self.getIsTextTrack(r.mimeType)) {
+                        representation.initialization = r.BaseURL;
+                        representation.range = 0;
+                    }
+
+                    if (segmentInfo.hasOwnProperty("timescale")) {
+                        representation.timescale = segmentInfo.timescale;
+                    }
+                    if (segmentInfo.hasOwnProperty("duration")) {
+                        representation.segmentDuration = segmentInfo.duration / representation.timescale;
+                    }
+                    if (segmentInfo.hasOwnProperty("startNumber")) {
+                        representation.startNumber = segmentInfo.startNumber;
+                    }
+                    if (segmentInfo.hasOwnProperty("indexRange")) {
+                        representation.indexRange = segmentInfo.indexRange;
+                    }
+                    if (segmentInfo.hasOwnProperty("presentationTimeOffset")) {
+                        representation.presentationTimeOffset = segmentInfo.presentationTimeOffset / representation.timescale;
+                    }
+
+                    representation.presentationStartTime = self.timelineConverter.calcPresentationStartTime(representation, isDynamic);
+
+                    representation.MSETimeOffset = self.timelineConverter.calcMSETimeOffset(representation);
+                    representations.push(representation);
                 }
 
-                if (segmentInfo.hasOwnProperty("initialization")) {
-                    representation.initialization = segmentInfo.initialization.split("$Bandwidth$")
-                        .join(r.bandwidth).split("$RepresentationID$").join(r.id);
-                }
-            } else {
-                segmentInfo = r.BaseURL;
-                representation.segmentInfoType = "BaseURL";
+                deferred.resolve(representations);
             }
+        );
 
-            if (segmentInfo.hasOwnProperty("Initialization")) {
-                initialization = segmentInfo.Initialization;
-                if (initialization.hasOwnProperty("sourceURL")) {
-                    representation.initialization = initialization.sourceURL;
-                } else if (initialization.hasOwnProperty("range")) {
-                    representation.initialization = r.BaseURL;
-                    representation.range = initialization.range;
-                }
-            } else if (r.hasOwnProperty("mimeType") && this.getIsTextTrack(r.mimeType)) {
-                representation.initialization = r.BaseURL;
-                representation.range = 0;
-            }
-
-            if (segmentInfo.hasOwnProperty("timescale")) {
-                representation.timescale = segmentInfo.timescale;
-            }
-            if (segmentInfo.hasOwnProperty("duration")) {
-                representation.segmentDuration = segmentInfo.duration / representation.timescale;
-            }
-            if (segmentInfo.hasOwnProperty("startNumber")) {
-                representation.startNumber = segmentInfo.startNumber;
-            }
-            if (segmentInfo.hasOwnProperty("indexRange")) {
-                representation.indexRange = segmentInfo.indexRange;
-            }
-            if (segmentInfo.hasOwnProperty("presentationTimeOffset")) {
-                representation.presentationTimeOffset = segmentInfo.presentationTimeOffset / representation.timescale;
-            }
-
-            representation.MSETimeOffset = this.timelineConverter.calcMSETimeOffset(representation);
-            representations.push(representation);
-        }
-
-        return Q.when(representations);
+        return deferred.promise;
     },
 
     getAdaptationsForPeriod: function(manifest, period) {
@@ -634,9 +644,7 @@ Dash.dependencies.DashManifestExtensions.prototype = {
     },
 
     getMpd: function(manifest) {
-        var self = this,
-            deferred = Q.defer(),
-            mpd = new Dash.vo.Mpd();
+        var mpd = new Dash.vo.Mpd();
 
         mpd.manifest = manifest;
 
@@ -658,15 +666,6 @@ Dash.dependencies.DashManifestExtensions.prototype = {
             mpd.timeShiftBufferDepth = manifest.timeShiftBufferDepth;
         }
 
-        self.getIsDynamic(manifest).then(
-            function(isDynamic) {
-                if (isDynamic) {
-                    mpd.periodAvailabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(manifest.Period_asArray[0].start - mpd.suggestedPresentationDelay, mpd, isDynamic);
-                }
-                deferred.resolve(mpd);
-            }
-        )
-
-        return deferred.promise;
+        return Q.when(mpd);
     }
 };

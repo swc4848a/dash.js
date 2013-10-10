@@ -20,6 +20,8 @@ Dash.vo.Segment = function () {
     this.duration = NaN;
     // this is the time that should be inserted into the media url
     this.replacementTime = null,
+    // this is the number that should be inserted into the media url
+    this.replacementNumber = NaN,
     // This is supposed to match the time encoded in the media Segment
     this.mediaStartTime = NaN;
     // When the source buffer timeOffset is set to MSETimeOffset this is the 
