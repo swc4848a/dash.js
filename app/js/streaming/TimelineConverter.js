@@ -46,14 +46,16 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, mpd, isDynamic, true);
         },
 
-        calcPresentationStartTime = function (representation, isDynamic) {
-            var now = new Date(),
-                presentationStartTime;
+        calcPresentationStartTime = function (period) {
+            var presentationStartTime,
+                isDynamic;
+
+            isDynamic = period.mpd.manifest.type === "dynamic";
 
             if (isDynamic) {
-                presentationStartTime = calcPresentationTimeFromWallTime.call(this, now, representation.adaptation.period, isDynamic);
+                presentationStartTime = calcPresentationTimeFromWallTime.call(this, period.mpd.manifest.mpdLoadedTime, period, isDynamic);
             } else {
-                presentationStartTime = calcPresentationTimeFromMediaTime(0, representation);
+                presentationStartTime = period.start;
             }
 
             return presentationStartTime;

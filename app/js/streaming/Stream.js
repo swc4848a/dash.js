@@ -512,26 +512,35 @@ MediaPlayer.dependencies.Stream = function () {
 
         onLoad = function () {
             this.debug.log("Got loadmetadata event.");
+
+            var initialSeekTime = this.timelineConverter.calcPresentationStartTime(periodInfo);
+            this.debug.log("Starting playback at offset: " + initialSeekTime);
+
+            this.system.notify("setCurrentTime");
+            this.videoModel.setCurrentTime(initialSeekTime);
+
             load.resolve(null);
         },
 
         onPlay = function () {
+
             this.debug.log("Got play event.");
 
             if (!initialized) {
                 return;
             }
 
-            this.debug.log("Starting playback.");
+            var initialSeekTime = this.timelineConverter.calcPresentationStartTime(periodInfo);
+            this.debug.log("Starting segment loading at offset: " + initialSeekTime);
 
             if (videoController) {
-                videoController.start();
+                videoController.seek(initialSeekTime);
             }
             if (audioController) {
-                audioController.start();
+                audioController.seek(initialSeekTime);
             }
             if (textController) {
-                textController.start();
+                textController.seek(initialSeekTime);
             }
         },
 
@@ -648,14 +657,8 @@ MediaPlayer.dependencies.Stream = function () {
                         pause.call(self);
                         return;
                     }
-                    initPlayback.call(self);
                 }
             );
-        },
-
-        initPlayback = function() {
-            this.debug.log("Got content.  Starting playback at offset: " + periodInfo.start);
-            seek.call(this, periodInfo.start);
         },
 
         currentTimeChanged = function () {
@@ -675,38 +678,40 @@ MediaPlayer.dependencies.Stream = function () {
             self.debug.log("Manifest updated... set new data on buffers.");
 
             if (videoController) {
-                videoController.setPeriodInfo(periodInfo);
                 videoData = videoController.getData();
 
                 if (videoData.hasOwnProperty("id")) {
                     self.manifestExt.getDataForId(videoData.id, manifest, periodInfo.index).then(
                         function (data) {
                             videoController.setData(data);
+                            videoController.setPeriodInfo(periodInfo);
                         }
                     );
                 } else {
                     self.manifestExt.getDataForIndex(videoTrackIndex, manifest, periodInfo.index).then(
                         function (data) {
                             videoController.setData(data);
+                            videoController.setPeriodInfo(periodInfo);
                         }
                     );
                 }
             }
 
             if (audioController) {
-                audioController.setPeriodInfo(periodInfo);
                 audioData = audioController.getData();
 
                 if (audioData.hasOwnProperty("id")) {
                     self.manifestExt.getDataForId(audioData.id, manifest, periodInfo.index).then(
                         function (data) {
                             audioController.setData(data);
+                            audioController.setPeriodInfo(periodInfo);
                         }
                     );
                 } else {
                     self.manifestExt.getDataForIndex(audioTrackIndex, manifest, periodInfo.index).then(
                         function (data) {
                             audioController.setData(data);
+                            audioController.setPeriodInfo(periodInfo);
                         }
                     );
                 }
@@ -732,6 +737,7 @@ MediaPlayer.dependencies.Stream = function () {
         debug: undefined,
         metricsExt: undefined,
         errHandler: undefined,
+        timelineConverter: undefined,
         requestScheduler: undefined,
 
         setup: function () {
@@ -828,7 +834,6 @@ MediaPlayer.dependencies.Stream = function () {
             return periodInfo;
         },
 
-        initPlayback: initPlayback,
         updateData: updateData,
         play: play,
         seek: seek,
