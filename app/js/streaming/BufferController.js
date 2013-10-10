@@ -322,7 +322,7 @@ MediaPlayer.dependencies.BufferController = function () {
                 promise = self.indexHandler.getSegmentRequestForTime(currentRepresentation, playingTime);
             } else {
                 var deferred = Q.defer(),
-                    segmentTime = self.videoModel.getCurrentTime();
+                    segmentTime = getWorkingTime.call(self);
 
                 promise = deferred.promise;
                 seeking = false;
@@ -428,12 +428,12 @@ MediaPlayer.dependencies.BufferController = function () {
         getWorkingTime = function () {
             var time = -1;
 
-            /* seeking gets stuck on when the buffer already has the segment containing seekTarget appended
-            if (seeking) {
+            if ((seeking || this.videoModel.getCurrentTime() === 0) && seekTarget >= 0) {
                 time = seekTarget;
                 this.debug.log("Working time is seek time: " + time);
             }
             else
+            /* seeking gets stuck on when the buffer already has the segment containing seekTarget appended
             if (waitingForBuffer && !seeking) {
                 time = mseGetDesiredTime();
                 this.debug.log("Working time is mse time: " + time);
