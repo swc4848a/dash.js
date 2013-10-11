@@ -96,11 +96,11 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return wallTime;
         },
 
-        calcMSETimeOffset = function (representation) {
-            var periodStart = representation.adaptation.period.start,
-                presentationOffset = representation.presentationTimeOffset;
+        calcMSETimeOffset = function (representation, mediaStartTime) {
+            var presentationStartTime = calcPresentationStartTime.call(this, representation.adaptation.period),
+                initialOffset = calcPresentationTimeFromMediaTime(mediaStartTime, representation);
 
-            return (periodStart - presentationOffset);
+            return (presentationStartTime - initialOffset);
         };
 
     return {
