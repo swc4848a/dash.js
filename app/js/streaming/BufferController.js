@@ -663,16 +663,18 @@ MediaPlayer.dependencies.BufferController = function () {
         },
 
         setData: function (value) {
-            var self = this;
+            var self = this,
+                oldValue;
 
             if (data !== null && data !== undefined) {
-                self.abrController.getPlaybackQuality(type, data).then(
+                oldValue = data;
+                data = value;
+                self.abrController.getPlaybackQuality(type, oldValue).then(
                     function (quality) {
                         self.indexHandler.getCurrentTime(currentRepresentation).then(
                             function (time) {
                                 dataChanged = true;
                                 playingTime = time;
-                                data = value;
                                 currentRepresentation = getRepresentationForQuality.call(self, quality);
                             }
                         );
