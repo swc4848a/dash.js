@@ -153,7 +153,7 @@ Dash.dependencies.DashHandler = function () {
             seg.duration = duration;
             seg.presentationStartTime = presentationStartTime;
 
-            seg.mediaStartTime = self.timelineConverter.calcMediaTimeFromPresentationTime(seg.presentationStartTime, representation) + (representation.startNumber * duration);
+            seg.mediaStartTime = self.timelineConverter.calcMediaTimeFromPresentationTime(seg.presentationStartTime, representation);
 
             seg.availabilityStartTime = self.timelineConverter.calcAvailabilityStartTimeFromPresentationTime(seg.presentationStartTime, representation.adaptation.period.mpd, isDynamic);
             seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, representation.adaptation.period.mpd, isDynamic);
@@ -241,7 +241,7 @@ Dash.dependencies.DashHandler = function () {
                 presentationEndTime,
                 seg;
 
-            presentationStartTime = representation.adaptation.period.start +  (index * scaledDuration);
+            presentationStartTime = representation.adaptation.period.start +  self.timelineConverter.calcPresentationTimeFromMediaTime(scaledTime, representation);
             presentationEndTime = presentationStartTime + scaledDuration;
 
             seg = new Dash.vo.Segment();
@@ -493,7 +493,6 @@ Dash.dependencies.DashHandler = function () {
                     self.debug.log(segments);
                     self.debug.log("Got a list of segments, so dig deeper.");
                     representation.segments = segments;
-                    representation.MSETimeOffset = self.timelineConverter.calcMSETimeOffset(representation, segments[0].mediaStartTime);
                     segmentsPromise = getIndexForSegments.call(self, time, segments);
                     return segmentsPromise;
                 }
