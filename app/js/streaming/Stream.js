@@ -672,6 +672,10 @@ MediaPlayer.dependencies.Stream = function () {
             var self = this,
                 videoData,
                 audioData,
+                deferredVideoData,
+                deferredAudioData,
+                deferredVideoUpdate = Q.defer(),
+                deferredAudioUpdate = Q.defer(),
                 manifest = self.manifestModel.getValue();
 
             periodInfo = updatedPeriodInfo;
@@ -681,41 +685,47 @@ MediaPlayer.dependencies.Stream = function () {
                 videoData = videoController.getData();
 
                 if (videoData.hasOwnProperty("id")) {
-                    self.manifestExt.getDataForId(videoData.id, manifest, periodInfo.index).then(
-                        function (data) {
-                            videoController.setData(data);
-                            videoController.setPeriodInfo(periodInfo);
-                        }
-                    );
+                    deferredVideoData = self.manifestExt.getDataForId(videoData.id, manifest, periodInfo.index);
                 } else {
-                    self.manifestExt.getDataForIndex(videoTrackIndex, manifest, periodInfo.index).then(
-                        function (data) {
-                            videoController.setData(data);
-                            videoController.setPeriodInfo(periodInfo);
-                        }
-                    );
+                    deferredVideoData = self.manifestExt.getDataForIndex(videoTrackIndex, manifest, periodInfo.index);
                 }
+
+                deferredVideoData.then(
+                    function(data) {
+                        videoController.updateData(data, periodInfo).then(
+                            function(){
+                                deferredVideoUpdate.resolve();
+                            }
+                        );
+                    }
+                );
+            } else {
+                deferredVideoUpdate.resolve();
             }
 
             if (audioController) {
                 audioData = audioController.getData();
 
                 if (audioData.hasOwnProperty("id")) {
-                    self.manifestExt.getDataForId(audioData.id, manifest, periodInfo.index).then(
-                        function (data) {
-                            audioController.setData(data);
-                            audioController.setPeriodInfo(periodInfo);
-                        }
-                    );
+                    deferredAudioData = self.manifestExt.getDataForId(audioData.id, manifest, periodInfo.index);
                 } else {
-                    self.manifestExt.getDataForIndex(audioTrackIndex, manifest, periodInfo.index).then(
-                        function (data) {
-                            audioController.setData(data);
-                            audioController.setPeriodInfo(periodInfo);
-                        }
-                    );
+                    deferredAudioData = self.manifestExt.getDataForIndex(audioTrackIndex, manifest, periodInfo.index);;
                 }
+
+                deferredAudioData.then(
+                    function(data){
+                        audioController.updateData(data, periodInfo).then(
+                            function(){
+                                deferredAudioUpdate.resolve();
+                            }
+                        );
+                    }
+                );
+            } else {
+                deferredAudioUpdate.resolve();
             }
+
+            return Q.when(deferredVideoUpdate.promise, deferredAudioUpdate.promise);
         };
 
     return {

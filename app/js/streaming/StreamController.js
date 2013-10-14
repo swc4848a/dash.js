@@ -223,6 +223,7 @@
             var self = this,
                 manifest = self.manifestModel.getValue(),
                 deferred = Q.defer(),
+                updatedStreams = [],
                 pLen,
                 sLen,
                 pIdx,
@@ -240,7 +241,7 @@
                                     // If the stream already exists we just need to update the values we got from the updated manifest
                                     if (streams[sIdx].getId() === period.id) {
                                         stream = streams[sIdx];
-                                        stream.updateData(period);
+                                        updatedStreams.push(stream.updateData(period));
                                     }
                                 }
                                 // If the Stream object does not exist we probably loaded the manifest the first time or it was
@@ -261,7 +262,12 @@
                                 activeStream = streams[0];
                                 attachVideoEvents.call(self, activeStream.getVideoModel());
                             }
-                            deferred.resolve();
+
+                            Q.all(updatedStreams).then(
+                                function() {
+                                    deferred.resolve();
+                                }
+                            );
                         }
                     );
                 }

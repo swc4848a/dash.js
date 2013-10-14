@@ -130,6 +130,8 @@ MediaPlayer.dependencies.BufferController = function () {
         },
 
         doStop = function () {
+            if (!started) return;
+
             this.debug.log("BufferController " + type + " stop.");
             setState.call(this, WAITING);
             this.requestScheduler.stopScheduling(this);
@@ -141,8 +143,9 @@ MediaPlayer.dependencies.BufferController = function () {
             clearPlayListTraceMetrics(new Date(), MediaPlayer.vo.metrics.PlayList.Trace.USER_REQUEST_STOP_REASON);
         },
 
-        updateRepresentations = function () {
+        updateRepresentations = function (data, periodInfo) {
             var self = this,
+                deferred = Q.defer(),
                 manifest = self.manifestModel.getValue();
             self.manifestExt.getDataIndex(data, manifest, periodInfo.index).then(
                 function(idx) {
@@ -150,13 +153,15 @@ MediaPlayer.dependencies.BufferController = function () {
                         function(adaptations) {
                             self.manifestExt.getRepresentationsForAdaptation(manifest, adaptations[idx]).then(
                                 function(representations) {
-                                    availableRepresentations = representations;
+                                    deferred.resolve(representations);
                                 }
                             );
                         }
                     );
                 }
             );
+
+            return deferred.promise;
         },
 
         getRepresentationForQuality = function (quality) {
@@ -586,8 +591,7 @@ MediaPlayer.dependencies.BufferController = function () {
 
             self.setVideoModel(videoModel);
             self.setType(type);
-            self.setData(data);
-            self.setPeriodInfo(periodInfo);
+            self.updateData(data, periodInfo);
             self.setBuffer(buffer);
             self.setScheduler(scheduler);
             self.setMinBufferTime(minBufferTime);
@@ -617,11 +621,6 @@ MediaPlayer.dependencies.BufferController = function () {
 
         getPeriodInfo: function () {
             return periodInfo;
-        },
-
-        setPeriodInfo: function (value) {
-            periodInfo = value;
-            updateRepresentations.call(this);
         },
 
         getVideoModel: function () {
@@ -662,27 +661,41 @@ MediaPlayer.dependencies.BufferController = function () {
             return data;
         },
 
-        setData: function (value) {
+        updateData: function(dataValue, periodInfoValue) {
             var self = this,
-                oldValue;
+                deferred = Q.defer();
 
-            if (data !== null && data !== undefined) {
-                oldValue = data;
-                data = value;
-                self.abrController.getPlaybackQuality(type, oldValue).then(
-                    function (quality) {
-                        self.indexHandler.getCurrentTime(currentRepresentation).then(
-                            function (time) {
-                                dataChanged = true;
-                                playingTime = time;
-                                currentRepresentation = getRepresentationForQuality.call(self, quality);
+            doStop.call(self);
+
+            updateRepresentations.call(self, dataValue, periodInfoValue).then(
+                function(representations) {
+                    availableRepresentations = representations;
+                    periodInfo = periodInfoValue;
+
+                    if (data !== null && data !== undefined) {
+                        self.abrController.getPlaybackQuality(type, data).then(
+                            function (quality) {
+                                self.indexHandler.getCurrentTime(currentRepresentation).then(
+                                    function (time) {
+                                        dataChanged = true;
+                                        playingTime = time;
+                                        currentRepresentation = getRepresentationForQuality.call(self, quality);
+                                        data = dataValue;
+                                        startPlayback.call(self);
+                                        deferred.resolve();
+                                    }
+                                );
                             }
                         );
+                    } else {
+                        data = dataValue;
+                        startPlayback.call(self);
+                        deferred.resolve();
                     }
-                );
-            } else {
-                data = value;
-            }
+                }
+            );
+
+            return deferred.promise;
         },
 
         getBuffer: function () {

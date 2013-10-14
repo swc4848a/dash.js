@@ -16,35 +16,49 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
 
     var minBufferTime,
         period,
+        lastUpdateTime,
+        deferredUpdate,
         estimatedUpdateTime,
 
         checkForUpdate = function() {
-            if (isUpdateRequired.call(this)) {
+            var currentTime = Math.floor(this.videoModel.getCurrentTime());
+
+            if (isUpdateRequired.call(this, currentTime)) {
+                lastUpdateTime = currentTime;
                 update.call(this);
             }
         },
 
-        isUpdateRequired = function() {
-            return ((estimatedUpdateTime - this.videoModel.getCurrentTime()) < minBufferTime);
+        isUpdateRequired = function(currentTime) {
+            return ((currentTime !== lastUpdateTime) && (estimatedUpdateTime - currentTime) < minBufferTime);
         },
 
         update = function() {
             var self = this,
-                manifest = self.manifestModel.getValue(),
-                url = manifest.mpdUrl;
+                manifest,
+                url;
 
-            if (manifest.hasOwnProperty("Location")) {
-                url = manifest.Location;
-            }
+            Q.when(deferredUpdate ? deferredUpdate.promise : true).then(
+                function() {
+                    deferredUpdate = Q.defer();
+                    manifest = self.manifestModel.getValue();
+                    url = manifest.mpdUrl;
 
-            self.debug.log("Refresh manifest @ " + url);
+                    if (manifest.hasOwnProperty("Location")) {
+                        url = manifest.Location;
+                    }
 
-            self.manifestLoader.load(url).then(
-                function (manifestResult) {
-                    self.manifestModel.setValue(manifestResult);
-                    self.debug.log("Manifest has been refreshed.");
-                    self.debug.log(manifestResult);
-                    self.startUpdating(self.videoModel, period);
+                    self.debug.log("Refresh manifest @ " + url);
+
+                    self.manifestLoader.load(url).then(
+                        function (manifestResult) {
+                            self.manifestModel.setValue(manifestResult);
+                            self.debug.log("Manifest has been refreshed.");
+                            self.debug.log(manifestResult);
+                            deferredUpdate.resolve();
+                            self.startUpdating(self.videoModel, period);
+                        }
+                    );
                 }
             );
         };
