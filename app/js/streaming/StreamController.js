@@ -277,7 +277,12 @@
         },
 
         manifestHasUpdated = function() {
-            composeStreams.call(this);
+            var self = this;
+            composeStreams.call(self).then(
+                function() {
+                    self.system.notify("streamsComposed");
+                }
+            );
         };
 
     return {

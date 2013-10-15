@@ -37,7 +37,8 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
             var self = this,
                 manifest,
                 url;
-
+            // The manifest should not update until the previous update has completed. A promise postpones the update
+            // until is is resolved. For the first time the promise does not exist yet, so pass 'true' instead.
             Q.when(deferredUpdate ? deferredUpdate.promise : true).then(
                 function() {
                     deferredUpdate = Q.defer();
@@ -55,12 +56,18 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
                             self.manifestModel.setValue(manifestResult);
                             self.debug.log("Manifest has been refreshed.");
                             self.debug.log(manifestResult);
-                            deferredUpdate.resolve();
-                            self.startUpdating(self.videoModel, period);
                         }
                     );
                 }
             );
+        },
+
+        onStreamsComposed = function() {
+            // When streams are ready we can consider manifest update completed. Resolve the update promise and get ready for another update
+            if (deferredUpdate) {
+                deferredUpdate.resolve();
+            }
+            this.startUpdating(this.videoModel, period);
         };
 
     return {
@@ -73,6 +80,8 @@ MediaPlayer.dependencies.ManifestUpdater = function () {
 
         setup: function() {
             checkForUpdate = checkForUpdate.bind(this);
+            // Listen to streamsReady event to be aware that the streams have been composed
+            this.system.mapHandler("streamsComposed", undefined, onStreamsComposed.bind(this));
         },
 
         startUpdating: function(videoModel, periodInfo) {
