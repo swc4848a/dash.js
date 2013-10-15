@@ -113,11 +113,11 @@ Dash.dependencies.DashHandler = function () {
         },
 
         isMediaFinished = function (representation) { // TODO
-            var fDuration,
-                sDuration,
-                startNumber,
-                idx,
-                isFinished = false;
+            var sDuration,
+                period = representation.adaptation.period,
+                isFinished = false,
+                seg,
+                fTime;
 
             this.debug.log("Checking for stream end...");
             if (isDynamic) {
@@ -125,12 +125,15 @@ Dash.dependencies.DashHandler = function () {
                 // TODO : Check the contents of the last box to signal end.
                 isFinished = false;
             } else {
-                sDuration = Math.floor(representation.adaptation.period.duration); // Disregard fractional seconds.  TODO : Is this ok?  The logic breaks if we don't do this...
-                fDuration = representation.segmentDuration;
-                startNumber = representation.startNumber;
-                idx = index - startNumber;
-                this.debug.log("SegmentTemplate: " + fDuration + " * " + idx + " = " + (fDuration * idx) + " / " + sDuration);
-                isFinished = ((fDuration * idx) >= sDuration);
+                if (index < representation.segments.length) {
+                    seg = representation.segments[index];
+                    fTime = seg.presentationStartTime - period.start;
+                    sDuration = Math.floor(representation.adaptation.period.duration); // Disregard fractional seconds.  TODO : Is this ok?  The logic breaks if we don't do this...
+                    this.debug.log(representation.segmentInfoType + ": " + fTime + " / " + sDuration);
+                    isFinished = (fTime >= sDuration);
+                } else {
+                    isFinished = true;
+                }
             }
 
             return Q.when(isFinished);
