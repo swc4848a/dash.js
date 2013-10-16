@@ -125,6 +125,10 @@
             return null;
         },
 
+        now = function() {
+            return this.videoModel.getCurrentTime();
+        },
+
         /*
          * Wraps the execute function in more abstract ScheduledTask for a greater flexibiliy
          *
@@ -252,6 +256,7 @@
             return (schedulerModel ? schedulerModel.getExecuteInterval() : null);
         },
 
+        now: now,
         startScheduling: startScheduling,
         stopScheduling: stopScheduling,
         // TODO find more appropriate names for these methods
