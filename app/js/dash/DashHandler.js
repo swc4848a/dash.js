@@ -244,7 +244,7 @@ Dash.dependencies.DashHandler = function () {
                 presentationEndTime,
                 seg;
 
-            presentationStartTime = representation.adaptation.period.start +  self.timelineConverter.calcPresentationTimeFromMediaTime(scaledTime, representation);
+            presentationStartTime = self.timelineConverter.calcPresentationTimeFromMediaTime(scaledTime, representation);
             presentationEndTime = presentationStartTime + scaledDuration;
 
             seg = new Dash.vo.Segment();
