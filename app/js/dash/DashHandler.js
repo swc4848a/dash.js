@@ -162,7 +162,7 @@ Dash.dependencies.DashHandler = function () {
             seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, representation.adaptation.period.mpd, isDynamic);
 
             // at this wall clock time, the video element currentTime should be seg.presentationStartTime
-            seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
+            seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg, isDynamic);
 
             seg.replacementNumber = getNumberForSegment(seg, index);
 
@@ -259,7 +259,7 @@ Dash.dependencies.DashHandler = function () {
             seg.availabilityEndTime = self.timelineConverter.calcAvailabilityEndTimeFromPresentationTime(presentationEndTime, representation.adaptation.period.mpd, isDynamic);
 
             // at this wall clock time, the video element currentTime should be seg.presentationStartTime
-            seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg);
+            seg.wallStartTime = self.timelineConverter.calcWallTimeForSegment(seg, isDynamic);
 
             seg.replacementTime = time;
 
