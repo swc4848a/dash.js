@@ -31,6 +31,7 @@ MediaPlayer.dependencies.FragmentModel = function () {
 
             if (now < start) {
                 // The availability start time exceeds the current wall-clock time, we should wait until the fragment is available
+                this.debug.log("canceling request - segment not available yet - now: " + now + ", start: " + start + ", segment: " + currentRequest.streamType + " - " + currentRequest.url);
                 cancelLoadingCallback.call(context);
             } else if (now < end) {
                 // We are about to start loading the fragment, so execute the corresponding callback
@@ -39,6 +40,7 @@ MediaPlayer.dependencies.FragmentModel = function () {
                     errorLoadingCallback.bind(context, currentRequest));
             } else {
                 // The current wall-clock time exceeds the availability end time, so the fragment is not available any more, do not schedule it again
+                this.debug.log("canceling request - segment not available anymore - now: " + now + ", end: " + end + ", segment: " + currentRequest.streamType + " - " + currentRequest.url);
                 executedRequests.push(currentRequest);
                 currentRequest = null;
                 cancelLoadingCallback.call(context);
