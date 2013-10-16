@@ -248,8 +248,21 @@ MediaPlayer.dependencies.BufferController = function () {
                 overdueRequests,
                 i;
 
+            deferred.promise.then(
+                function() {
+                    rangeCount = ranges.length;
+                    self.debug.log("Number of buffered " + type + " ranges: " + rangeCount);
+                    for (i = 0; i < rangeCount; i += 1) {
+                        self.debug.log("Buffered " + type + " Range: " + ranges.start(i) + " - " + ranges.end(i));
+                    }
+                }
+            );
+
             // If the buffer is empty then there is nothing to do
-            if (rangeCount === 0) return;
+            if (rangeCount === 0) {
+                deferred.resolve();
+                return;
+            }
 
             // Get the requests for the fragments that have already been loaded, but have become unavailable by now
             overdueRequests = self.fragmentController.getOverdueRequests(self);
@@ -275,17 +288,9 @@ MediaPlayer.dependencies.BufferController = function () {
                 } else {
                     deferred.resolve();
                 }
+            } else {
+                deferred.resolve();
             }
-
-            deferred.promise.then(
-                function() {
-                    rangeCount = ranges.length;
-                    self.debug.log("Number of buffered " + type + " ranges: " + rangeCount);
-                    for (i = 0; i < rangeCount; i += 1) {
-                        self.debug.log("Buffered " + type + " Range: " + ranges.start(i) + " - " + ranges.end(i));
-                    }
-                }
-            )
         },
 
         signalStreamComplete = function () {
