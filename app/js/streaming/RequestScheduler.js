@@ -137,16 +137,21 @@
          *
          */
         createScheduledTask = function(schedulerModel, executeFunction, isPeriodic) {
-            var videoModel = this.videoModel,
+            var self = this,
                 scheduledTask = function() {
+                    var now = self.videoModel.getCurrentTime(),
+                    due = schedulerModel.getExecuteTime();
 
-                if (isPeriodic) {
-                    executeFunction.call(schedulerModel.getContext());
-                } else if (Math.round(videoModel.getCurrentTime()) === schedulerModel.getExecuteTime()) {
-                    executeFunction.call(schedulerModel.getContext());
-                    schedulerModel.setIsScheduled(false);
-                }
-            };
+                    if (isPeriodic) {
+                        executeFunction.call(schedulerModel.getContext());
+                    } else {
+                        self.debug.log("scheduledTask - now: " + now + ", due: " + due);
+                        if (now > due) {
+                            executeFunction.call(schedulerModel.getContext());
+                            schedulerModel.setIsScheduled(false);
+                        }
+                    }
+                };
 
             return scheduledTask;
         },

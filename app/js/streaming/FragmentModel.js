@@ -26,13 +26,19 @@ MediaPlayer.dependencies.FragmentModel = function () {
 
         loadCurrentFragment = function() {
             var now = new Date(),
+                self = this,
                 start = currentRequest.availabilityStartTime,
-                end = currentRequest.availabilityEndTime;
+                end = currentRequest.availabilityEndTime,
+                scheduler = null;
+
+            scheduler = context.getScheduler();
+            scheduler.unscheduleOnce(self);
 
             if (now < start) {
                 // The availability start time exceeds the current wall-clock time, we should wait until the fragment is available
-                this.debug.log("canceling request - segment not available yet - now: " + now + ", start: " + start + ", segment: " + currentRequest.streamType + " - " + currentRequest.url);
-                cancelLoadingCallback.call(context);
+                this.debug.log("request pending - segment not available yet - now: " + now + ", start: " + start + ", segment: " + currentRequest.streamType + " - " + currentRequest.url);
+                scheduler.scheduleOnce(self, self.executeCurrentRequest, ((start.getTime() - now.getTime()) / 1000) + scheduler.now());
+                //cancelLoadingCallback.call(context);
             } else if (now < end) {
                 // We are about to start loading the fragment, so execute the corresponding callback
                 startLoadingCallback.call(context);
