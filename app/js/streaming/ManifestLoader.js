@@ -30,6 +30,8 @@ MediaPlayer.dependencies.ManifestLoader = function () {
                 request = new XMLHttpRequest(),
                 requestTime = new Date(),
                 mpdLoadedTime = null,
+                mpdServerSentTime,
+                mpdLoadingStartTime = new Date(),
                 loaded = false,
                 self = this;
 
@@ -47,6 +49,10 @@ MediaPlayer.dependencies.ManifestLoader = function () {
                 loaded = true;
 
                 mpdLoadedTime = new Date();
+                // The Date general-header field represents the date and time at which the message was originated.
+                // It is supposed to be a mandatory header.
+                // We need this value to know the server time to be able to calculate the time offset beetween the client and the server.
+                mpdServerSentTime = request.getResponseHeader("Date");
 
                 self.metricsModel.addHttpRequest("stream",
                                                  null,
@@ -64,6 +70,10 @@ MediaPlayer.dependencies.ManifestLoader = function () {
                     function (manifest) {
                         manifest.mpdUrl = url;
                         manifest.mpdLoadedTime = mpdLoadedTime;                        
+                        manifest.mpdLoadingTime = (mpdLoadedTime.getTime() - mpdLoadingStartTime.getTime()) / 1000;
+                        if (mpdServerSentTime) {
+                            manifest.mpdServerSentTime = new Date(mpdServerSentTime);
+                        }
                         deferred.resolve(manifest);
                     }
                 );

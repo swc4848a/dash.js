@@ -38,6 +38,19 @@ MediaPlayer.dependencies.TimelineConverter = function () {
             return availabilityTime;
         },
 
+        calcSyncTimeOffset = function(mpd) {
+            // SyncTimeOffset is a difference between the time on the client and the time on the server. The mpdServerSentTime
+            // is the date at which the server started sending the manifest.
+            // We do not know the exact time that was on the client when the server set mpdServerSentTime, but we know that it
+            // should be some time in the interval betweeen the time the client had sent a request and the time the manifest was loaded.
+            // This interval is the mpdLoadingTime. We use the middle of this interval to get the approximate value of the client time.
+            var manifest = mpd.manifest,
+                mpdClientTime = (manifest.mpdLoadedTime.getTime() / 1000) - (manifest.mpdLoadingTime / 2),
+                mpdServerTime = manifest.mpdServerSentTime.getTime() / 1000;
+
+            return (mpdClientTime - mpdServerTime);
+        },
+
         calcAvailabilityStartTimeFromPresentationTime = function(presentationTime, mpd, isDynamic) {
             return calcAvailabilityTimeFromPresentationTime.call(this, presentationTime, mpd, isDynamic);
         },
@@ -114,7 +127,8 @@ MediaPlayer.dependencies.TimelineConverter = function () {
         calcPresentationStartTime: calcPresentationStartTime,
         calcMediaTimeFromPresentationTime: calcMediaTimeFromPresentationTime,
         calcWallTimeForSegment: calcWallTimeForSegment,
-        calcMSETimeOffset: calcMSETimeOffset
+        calcMSETimeOffset: calcMSETimeOffset,
+        calcSyncTimeOffset: calcSyncTimeOffset
     };
 };
 

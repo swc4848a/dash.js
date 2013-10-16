@@ -642,18 +642,24 @@ Dash.dependencies.DashManifestExtensions.prototype = {
     },
 
     getMpd: function(manifest) {
-        var mpd = new Dash.vo.Mpd();
+        var mpd = new Dash.vo.Mpd(),
+            syncTimeOffset = 0;
 
         mpd.manifest = manifest;
 
+        // If we know the time server sent the manifest we are able to calculate the time offset between the client and the server
+        if (manifest.hasOwnProperty("mpdServerSentTime")) {
+            syncTimeOffset = this.timelineConverter.calcSyncTimeOffset(mpd) * 1000;
+        }
+
         if (manifest.hasOwnProperty("availabilityStartTime")) {
-            mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime());
+            mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime() + syncTimeOffset);
         } else {
-            mpd.availabilityStartTime = new Date(manifest.mpdLoadedTime.getTime());
+            mpd.availabilityStartTime = new Date(manifest.mpdLoadedTime.getTime() + syncTimeOffset);
         }
 
         if (manifest.hasOwnProperty("availabilityEndTime")) {
-            mpd.availabilityEndTime = new Date(manifest.availabilityEndTime.getTime());
+            mpd.availabilityEndTime = new Date(manifest.availabilityEndTime.getTime() + syncTimeOffset);
         }
 
         if (manifest.hasOwnProperty("suggestedPresentationDelay")) {
