@@ -13,6 +13,7 @@
  */
 Dash.dependencies.DashManifestExtensions = function () {
     "use strict";
+    this.timeSynchronizer = undefined;
     this.timelineConverter = undefined;
 };
 
@@ -643,33 +644,37 @@ Dash.dependencies.DashManifestExtensions.prototype = {
 
     getMpd: function(manifest) {
         var mpd = new Dash.vo.Mpd(),
+            deferred = Q.defer(),
             syncTimeOffset = 0;
 
         mpd.manifest = manifest;
 
-        // If we know the time server sent the manifest we are able to calculate the time offset between the client and the server
-        if (manifest.hasOwnProperty("mpdServerSentTime")) {
-            syncTimeOffset = this.timelineConverter.calcSyncTimeOffset(mpd) * 1000;
-        }
+        this.timeSynchronizer.getTimeDifferenceWithServer(manifest.mpdUrl).then(
+            function(timeOffset) {
+                syncTimeOffset = timeOffset * 1000;
 
-        if (manifest.hasOwnProperty("availabilityStartTime")) {
-            mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime() + syncTimeOffset);
-        } else {
-            mpd.availabilityStartTime = new Date(manifest.mpdLoadedTime.getTime() + syncTimeOffset);
-        }
+                if (manifest.hasOwnProperty("availabilityStartTime")) {
+                    mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime() + syncTimeOffset);
+                } else {
+                    mpd.availabilityStartTime = new Date(manifest.mpdLoadedTime.getTime() + syncTimeOffset);
+                }
 
-        if (manifest.hasOwnProperty("availabilityEndTime")) {
-            mpd.availabilityEndTime = new Date(manifest.availabilityEndTime.getTime() + syncTimeOffset);
-        }
+                if (manifest.hasOwnProperty("availabilityEndTime")) {
+                    mpd.availabilityEndTime = new Date(manifest.availabilityEndTime.getTime() + syncTimeOffset);
+                }
 
-        if (manifest.hasOwnProperty("suggestedPresentationDelay")) {
-            mpd.suggestedPresentationDelay = manifest.suggestedPresentationDelay;
-        }
+                if (manifest.hasOwnProperty("suggestedPresentationDelay")) {
+                    mpd.suggestedPresentationDelay = manifest.suggestedPresentationDelay;
+                }
 
-        if (manifest.hasOwnProperty("timeShiftBufferDepth")) {
-            mpd.timeShiftBufferDepth = manifest.timeShiftBufferDepth;
-        }
+                if (manifest.hasOwnProperty("timeShiftBufferDepth")) {
+                    mpd.timeShiftBufferDepth = manifest.timeShiftBufferDepth;
+                }
 
-        return Q.when(mpd);
+                deferred.resolve(mpd);
+            }
+        );
+
+        return deferred.promise;
     }
 };
