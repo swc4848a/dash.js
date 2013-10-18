@@ -22,6 +22,7 @@ MediaPlayer.dependencies.FragmentModel = function () {
         successLoadingCallback,
         errorLoadingCallback,
         cancelLoadingCallback,
+        deferredExecute,
         streamEndCallback,
 
         loadCurrentFragment = function() {
@@ -32,12 +33,12 @@ MediaPlayer.dependencies.FragmentModel = function () {
                 scheduler = null;
 
             scheduler = context.getScheduler();
-            scheduler.unscheduleOnce(self);
+            scheduler.removeTriggerForWallTime(self);
 
             if (now < start) {
                 // The availability start time exceeds the current wall-clock time, we should wait until the fragment is available
                 this.debug.log("request pending - segment not available yet - now: " + now + ", start: " + start + ", segment: " + currentRequest.streamType + " - " + currentRequest.url);
-                scheduler.scheduleOnce(self, self.executeCurrentRequest, ((start.getTime() - now.getTime()) / 1000) + scheduler.now());
+                scheduler.setTriggerForWallTime(self, loadCurrentFragment.bind(self), start);
                 //cancelLoadingCallback.call(context);
             } else if (now < end) {
                 // We are about to start loading the fragment, so execute the corresponding callback
@@ -50,6 +51,7 @@ MediaPlayer.dependencies.FragmentModel = function () {
                 executedRequests.push(currentRequest);
                 currentRequest = null;
                 cancelLoadingCallback.call(context);
+                deferredExecute.resolve();
             }
         },
 
@@ -89,11 +91,13 @@ MediaPlayer.dependencies.FragmentModel = function () {
                 }
                 currentRequest = null;
                 onLoadingSuccess.call(context, request, response);
+                deferredExecute.resolve();
             };
 
             errorLoadingCallback = function(response) {
                 currentRequest = null;
                 onLoadingError.call(context, response);
+                deferredExecute.resolve();
             };
         },
 
@@ -143,19 +147,28 @@ MediaPlayer.dependencies.FragmentModel = function () {
         },
 
         executeCurrentRequest: function() {
-            if (!currentRequest) return;
-
-            switch (currentRequest.action) {
-                case "complete":
-                    // Stream has completed, execute the correspoinding callback
-                    streamEndCallback.call(context);
-                    break;
-                case "download":
-                    loadCurrentFragment.call(this);
-                    break;
-                default:
-                    this.debug.log("Unknown request action.");
-            }
+            var self = this;
+            Q.when(deferredExecute ? deferredExecute.promise : true).then(
+                function() {
+                    if (!currentRequest) return;
+                    deferredExecute = Q.defer();
+                    switch (currentRequest.action) {
+                        case "complete":
+                            // Stream has completed, execute the correspoinding callback
+                            executedRequests.push(currentRequest);
+                            currentRequest = null;
+                            streamEndCallback.call(context);
+                            deferredExecute.resolve();
+                            break;
+                        case "download":
+                            loadCurrentFragment.call(self);
+                            break;
+                        default:
+                            this.debug.log("Unknown request action.");
+                            deferredExecute.reject("Unknown request action.");
+                    }
+                }
+            );
         }
     };
 };

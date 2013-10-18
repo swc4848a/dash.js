@@ -20,6 +20,9 @@
 
     var schedulerModels = [],
         isPeriodicListenerStarted = false,
+        PERIODICALLY_EXECUTED_TASK = 0,
+        WALL_TIME_TRIGGERED_TASK = 1,
+        PLAYER_TIME_TRIGGERED_TASK = 2,
 
         /*
          * Calls the execution function only ones for provided date or time interval in milliseconds
@@ -29,15 +32,13 @@
          * @time The date or time interval the executeFunction must be called
          *
          */
-        scheduleOnce = function(executeContext, executeFunction, dueTime) {
+        setTriggerForPlayerTime = function(executeContext, executeFunction, dueTime) {
             if(!executeContext || !executeFunction) return;
 
-            var schedulerModel,
-                scheduledTask;
+            var schedulerModel;
 
-            schedulerModel = registerSchedulerModel.call(this, executeContext);
-            scheduledTask = createScheduledTask.call(this, schedulerModel, executeFunction, false);
-            schedulerModel.setScheduledTask(scheduledTask);
+            schedulerModel = registerSchedulerModel.call(this, executeContext, PLAYER_TIME_TRIGGERED_TASK);
+            schedulerModel.setScheduledTask(executeFunction);
             schedulerModel.setIsScheduled(true);
             schedulerModel.setExecuteTime(dueTime);
         },
@@ -48,10 +49,49 @@
          * @param executeContext The object to be used as execution context
          *
          */
-        unscheduleOnce = function(executeContext) {
-            var schedulerModel = findSchedulerModel(executeContext);
+        removeTriggerForPlayerTime = function(executeContext) {
+            var schedulerModel = findSchedulerModel(executeContext, PLAYER_TIME_TRIGGERED_TASK);
 
             if (schedulerModel) {
+                unregisterSchedulerModel(schedulerModel);
+            }
+        },
+
+        /*
+         * Calls the execution function at the provided wall click time
+         *
+         * @param executeContext The object to be used as execution context
+         * @param executeFunction The function to be executed on schedule
+         * @time The wall click time at which the executeFunction must be called
+         *
+         */
+        setTriggerForWallTime = function(executeContext, executeFunction, wallTime) {
+            if(!executeContext || !executeFunction) return;
+
+            var executeTimeout = wallTime.getTime() - (new Date()).getTime(),
+                executeId,
+                schedulerModel;
+
+            schedulerModel = registerSchedulerModel.call(this, executeContext, WALL_TIME_TRIGGERED_TASK);
+            schedulerModel.setScheduledTask(executeFunction);
+            executeId = setTimeout(function() {
+                schedulerModel.executeScheduledTask();
+                unregisterSchedulerModel(schedulerModel);
+            }, executeTimeout);
+            schedulerModel.setExecuteId(executeId);
+        },
+
+        /*
+         * Cancels the scheduled call for executeContex
+         *
+         * @param executeContext The object to be used as execution context
+         *
+         */
+        removeTriggerForWallTime = function(executeContext) {
+            var schedulerModel = findSchedulerModel(executeContext, WALL_TIME_TRIGGERED_TASK);
+
+            if (schedulerModel) {
+                clearTimeout(schedulerModel.getExecuteId());
                 unregisterSchedulerModel(schedulerModel);
             }
         },
@@ -67,16 +107,14 @@
             if(!executeContext || !executeFunction) return;
 
             // Searching for existing model for the passed context
-            var schedulerModel = findSchedulerModel(executeContext),
-                scheduledTask;
+            var schedulerModel = findSchedulerModel(executeContext, PERIODICALLY_EXECUTED_TASK);
 
             // if we have not stored the model yet, do it now
             if (!schedulerModel) {
-                schedulerModel = registerSchedulerModel.call(this, executeContext);
+                schedulerModel = registerSchedulerModel.call(this, executeContext, PERIODICALLY_EXECUTED_TASK);
             }
 
-            scheduledTask = createScheduledTask.call(this, schedulerModel, executeFunction, true);
-            schedulerModel.setScheduledTask(scheduledTask);
+            schedulerModel.setScheduledTask(executeFunction);
             schedulerModel.setIsScheduled(true);
             startPeriodicScheduleListener.call(this);
             //TODO: for now we have to call executeFunction 'manually' for the first time before it can be called from event listener
@@ -88,11 +126,12 @@
          *
          * @param executeContext
          */
-        registerSchedulerModel = function (executeContext) {
+        registerSchedulerModel = function (executeContext, type) {
             if(!executeContext) return null;
 
             var model = this.system.getObject("schedulerModel");
             model.setContext(executeContext);
+            model.setType(type);
             schedulerModels.push(model);
             return model;
         },
@@ -115,9 +154,9 @@
          *
          * @param executeContext
          */
-        findSchedulerModel = function(executeContext) {
+        findSchedulerModel = function(executeContext, type) {
             for (var i = 0; i < schedulerModels.length; i++) {
-                if (schedulerModels[i].getContext() === executeContext) {
+                if (schedulerModels[i].getContext() === executeContext && schedulerModels[i].getType() === type) {
                     return schedulerModels[i];
                 }
             }
@@ -130,47 +169,45 @@
         },
 
         /*
-         * Wraps the execute function in more abstract ScheduledTask for a greater flexibiliy
-         *
-         * @param schedulerModel
-         * @param executeFunction The function to be executed as part of ScheduledTask
-         *
-         */
-        createScheduledTask = function(schedulerModel, executeFunction, isPeriodic) {
-            var self = this,
-                scheduledTask = function() {
-                    var now = self.videoModel.getCurrentTime(),
-                    due = schedulerModel.getExecuteTime();
-
-                    if (isPeriodic) {
-                        executeFunction.call(schedulerModel.getContext());
-                    } else {
-                        self.debug.log("scheduledTask - now: " + now + ", due: " + due);
-                        if (now > due) {
-                            executeFunction.call(schedulerModel.getContext());
-                            schedulerModel.setIsScheduled(false);
-                        }
-                    }
-                };
-
-            return scheduledTask;
-        },
-
-        /*
          * Called when the periodic scheduled event occures
          *
          */
         onScheduledTimeOccurred = function() {
-            runScheduledTasks();
+            runScheduledTasks.call(this);
         },
 
         runScheduledTasks = function() {
-            var schedulerModel;
+            var self = this,
+                schedulerModel,
+                type,
+                now,
+                due;
 
             for (var i = 0; i < schedulerModels.length; i++) {
                 schedulerModel = schedulerModels[i];
-                if (schedulerModel.getIsScheduled()) {
-                    schedulerModel.getScheduledTask().call();
+
+                if (!schedulerModel.getIsScheduled()) {
+                    continue;
+                }
+
+                type = schedulerModel.getType();
+
+                if (type === PERIODICALLY_EXECUTED_TASK) {
+                    schedulerModel.executeScheduledTask();
+                    continue;
+                }
+
+                if (type === PLAYER_TIME_TRIGGERED_TASK) {
+                    now = self.videoModel.getCurrentTime();
+                    due = schedulerModel.getExecuteTime();
+                    self.debug.log("scheduledTask - now: " + now + ", due: " + due);
+
+                    if (now <= due) {
+                        continue;
+                    }
+
+                    schedulerModel.executeScheduledTask();
+                    schedulerModel.setIsScheduled(false);
                 }
             }
         },
@@ -186,8 +223,8 @@
 
             isPeriodicListenerStarted = true;
             var element = this.videoModel.getElement();
-            this.schedulerExt.attachScheduleListener(element, onScheduledTimeOccurred);
-            this.schedulerExt.attachUpdateScheduleListener(element, onUpdateSchedule);
+            this.schedulerExt.attachScheduleListener(element, onScheduledTimeOccurred.bind(this));
+            this.schedulerExt.attachUpdateScheduleListener(element, onUpdateSchedule.bind(this));
         },
 
         /*
@@ -197,7 +234,7 @@
          *
          */
         stopScheduling = function(executeContext) {
-            var schedulerModel = findSchedulerModel(executeContext);
+            var schedulerModel = findSchedulerModel(executeContext, PERIODICALLY_EXECUTED_TASK);
             if (schedulerModel) {
                 unregisterSchedulerModel(schedulerModel);
                 if (schedulerModels.length === 0) {
@@ -214,14 +251,14 @@
          */
         stopPeriodicScheduleListener = function() {
             var element = this.videoModel.getElement();
-            this.schedulerExt.detachScheduleListener(element, onScheduledTimeOccurred);
-            this.schedulerExt.detachUpdateScheduleListener(element, onUpdateSchedule);
+            this.schedulerExt.detachScheduleListener(element, onScheduledTimeOccurred.bind(this));
+            this.schedulerExt.detachUpdateScheduleListener(element, onUpdateSchedule.bind(this));
             isPeriodicListenerStarted = false;
         },
 
         onUpdateSchedule = function() {
-            rescheduleTasks();
-            runScheduledTasks();
+            rescheduleTasks.call(this);
+            runScheduledTasks.call(this);
         },
 
         /*
@@ -246,7 +283,7 @@
          *
          */
         isScheduled: function(executeContext) {
-            var schedulerModel = findSchedulerModel(executeContext);
+            var schedulerModel = findSchedulerModel(executeContext, PERIODICALLY_EXECUTED_TASK);
             return (!!schedulerModel && schedulerModel.getIsScheduled());
         },
 
@@ -257,16 +294,17 @@
          *
          */
         getExecuteInterval: function (executeContext) {
-            var schedulerModel = findSchedulerModel(executeContext);
+            var schedulerModel = findSchedulerModel(executeContext, PERIODICALLY_EXECUTED_TASK);
             return (schedulerModel ? schedulerModel.getExecuteInterval() : null);
         },
 
         now: now,
         startScheduling: startScheduling,
         stopScheduling: stopScheduling,
-        // TODO find more appropriate names for these methods
-        scheduleOnce: scheduleOnce,
-        unscheduleOnce: unscheduleOnce
+        setTriggerForPlayerTime: setTriggerForPlayerTime,
+        setTriggerForWallTime: setTriggerForWallTime,
+        removeTriggerForPlayerTime: removeTriggerForPlayerTime,
+        removeTriggerForWallTime: removeTriggerForWallTime
     };
 };
 
