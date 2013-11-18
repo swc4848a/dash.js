@@ -18,8 +18,10 @@ if(window.location.href.indexOf("runner.html")>0)
             context,
             obj,
             element,
-            source,
+			video,
+			source,
             stream,
+			requestScheduler,
             system;
      
             beforeEach(function () {
@@ -28,146 +30,171 @@ if(window.location.href.indexOf("runner.html")>0)
                 system.mapOutlet("system");
                 context = new Dash.di.DashContext();
                 system.injectInto(context);
-                source = "http://dashdemo.edgesuite.net/envivio/dashpr/clear/Manifest.mpd";
+				
+				stream = createObject(system);
+				
+				bufferController = system.getObject('bufferController');
+				requestScheduler = system.getObject('requestScheduler');
+				bufferController.setScheduler(requestScheduler);
             });
             
            
             it("creating buffer controller object by setting  ready true and calling do start", function () {
-                
-                 stream=createObject(system,source); 
-
-                 waitsFor(function () {
-                   if(stream.manifestModel.getValue()!=undefined)
-                    return true;
-                   }, "data is null", 100);
-                  runs(function () {
-                        bufferController = system.getObject('bufferController');
-                        currentTime = new Date();
-                        var playlist=bufferController.metricsModel.addPlayList(bufferController.getType(), currentTime, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
-                        expect(playlist.starttype).toBe("initial_start");
-                   });
-                  // bufferController.start(); --Commented because already load is happening,
+				debugger;
+				bufferController.start();
+				expect(bufferController.metricsModel.getMetricsFor(undefined).PlayList[0].starttype).toBe("initial_start");				
             });
             
+			it("creating buffer controller object by setting  ready true and calling do seek", function () {                
+				//bufferController.seek(77.42845916748047); --Commented because already load is happening,
+			    currentTime = new Date();
+			    var playlist=bufferController.metricsModel.addPlayList(bufferController.getType(), currentTime, 0, MediaPlayer.vo.metrics.PlayList.SEEK_START_REASON);
+			    expect(playlist.starttype).toBe("seek");
+            });
+			
              it("creating buffer controller object by setting started false and ready true", function () {
-                 var result=false;
-                 stream=createObject(system,source); 
-
-                 manifestLoader = system.getObject('manifestLoader');
-                 manifestLoader.load(source).then( function (manifestResult) {
-                       stream.manifestModel.setValue(manifestResult);
-                       result=true
-                    });
-
-                 waitsFor(function () {
-                    if(result)
-                       return true;
-                      }, "data is null", 100);
-                    runs(function () {
-                        bufferController = system.getObject('bufferController');
-                    });
-            });
-                
-            it("creating buffer controller object by setting  ready true and calling do seek", function () {
-                  stream=createObject(system,source); 
-
-                  waitsFor(function () {
-                    if(stream.manifestModel.getValue()!=undefined)
-                     return true;
-                    }, "data is null", 100);
-                   runs(function () {
-                        bufferController = system.getObject('bufferController')
-                        //bufferController.seek(77.42845916748047); --Commented because already load is happening,
-                       currentTime = new Date();
-                       var playlist=bufferController.metricsModel.addPlayList(bufferController.getType(), currentTime, 0, MediaPlayer.vo.metrics.PlayList.SEEK_START_REASON);
-                       expect(playlist.starttype).toBe("seek");
-                  });
+			    currentTime = new Date();
+			    var playlist=bufferController.metricsModel.addPlayList(bufferController.getType(), currentTime, 0, MediaPlayer.vo.metrics.PlayList.SEEK_START_REASON);
+			    expect(playlist.starttype).toBe("seek");
             });
             
-            it("creating buffer controller object by setting  ready true and calling do stop", function () {
-                    stream=createObject(system,source); 
-                    waitsFor(function () {
-                       if(stream.manifestModel.getValue()!=undefined)
-                        return true;
-                       }, "data is null", 100);
-                    runs(function () {
-                       bufferController = system.getObject('bufferController')
-                       bufferController.stop();
-                      currentTime = new Date();
+            it("checking object data with input 0", function () {
+				bufferController.seek(0); 
+				expect(bufferController.metricsModel.getMetricsFor(undefined).PlayList[0].mstart).toBe(0);
+            });  
 
-                    });
+            it("checking object data with input in between", function () {
+				bufferController.seek(77.42845916748047); 
+				expect(bufferController.metricsModel.getMetricsFor(undefined).PlayList[0].mstart).toBe(77.42845916748047);
+            });
+            
+            it("seek with multiple values", function () {
+				bufferController.seek(77.42845916748047); 
+				bufferController.seek(235.2941176470588); 
+				expect(bufferController.metricsModel.getMetricsFor(undefined).PlayList.length).toBe(2);
+            });
+            
+             it("checking object data with input with full duration", function () {
+				bufferController.seek( 259.3207092285156); 
+				expect(bufferController.metricsModel.getMetricsFor(undefined).PlayList[0].mstart).toBe( 259.3207092285156);
+            });
+           
+            it("creating buffer controller object by setting  ready true and calling do stop", function () {
+				bufferController.stop();
+				expect(bufferController.metricsModel.getMetricsFor(undefined).PlayList.length).toBe(0);
             });
             
             //Negative test cases
             
             it("creating buffer controller object by setting  ready true and calling addPlayList method with out  type parameters", function () {
-                 stream=createObject(system,source); 
-                 waitsFor(function () {
-                   if(stream.manifestModel.getValue()!=undefined)
-                    return true;
-                   }, "data is null", 100);
-                  runs(function () {
-                        bufferController = system.getObject('bufferController');
-                        currentTime = new Date();
-                        var playlist=bufferController.metricsModel.addPlayList("", currentTime, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
-                        expect(playlist.starttype).toBe("initial_start");
-                   });
+				currentTime = new Date();
+				var playlist=bufferController.metricsModel.addPlayList("", currentTime, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
+				expect(playlist.starttype).toBe("initial_start");
             });
             
             it("creating buffer controller object by setting  ready true and calling addPlayList method with out time and type parameters ", function () {
-                 stream=createObject(system,source); 
-                 waitsFor(function () {
-                   if(stream.manifestModel.getValue()!=undefined)
-                    return true;
-                   }, "data is null", 100);
-                  runs(function () {
-                        bufferController = system.getObject('bufferController');
-                        var playlist=bufferController.metricsModel.addPlayList("", null, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
-                        expect(playlist.starttype).toBe("initial_start");
-                   });
+				var playlist=bufferController.metricsModel.addPlayList("", null, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
+				expect(playlist.starttype).toBe("initial_start");
             });
            
             it("creating buffer controller object by setting  ready true and calling addPlayList method with out time, seektarget and type parameters ", function () {
-                 stream=createObject(system,source); 
-                 waitsFor(function () {
-                   if(stream.manifestModel.getValue()!=undefined)
-                    return true;
-                   }, "data is null", 100);
-                  runs(function () {
-                        bufferController = system.getObject('bufferController');
-                        var playlist=bufferController.metricsModel.addPlayList("", null, null, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
-                        expect(playlist.starttype).toBe("initial_start");
-                   });
+				var playlist=bufferController.metricsModel.addPlayList("", null, null, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
+				expect(playlist.starttype).toBe("initial_start");
             });
             
             it("creating buffer controller object by setting  ready true and calling addPlayList with all parameters null", function () {
-                 stream=createObject(system,source); 
-                 waitsFor(function () {
-                   if(stream.manifestModel.getValue()!=undefined)
-                    return true;
-                   }, "data is null", 100);
-                  runs(function () {
-                        bufferController = system.getObject('bufferController');
-                        var playlist=bufferController.metricsModel.addPlayList("", null, null, null);
-                        expect(playlist.starttype).toBe(null);
-                   });
+				var playlist=bufferController.metricsModel.addPlayList("", null, null, null);
+				expect(playlist.starttype).toBe(null);
             });
-
             
+			it("checking play list trace with initial start playlist and User Request Stop Reason", function () {
+                currentTime = new Date();
+				var playlist=bufferController.metricsModel.addPlayList("", null, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
+				var playlisttrace = bufferController.metricsModel.appendPlayListTrace(playlist,0,0,currentTime,0,0,0,MediaPlayer.vo.metrics.PlayList.Trace.USER_REQUEST_STOP_REASON);
+				expect(playlisttrace.stopreason).toBe("user_request");
+            });
+			
+			it("checking play list trace with initial start playlist and Representation Switch Stop Reason", function () {
+                currentTime = new Date();
+				var playlist=bufferController.metricsModel.addPlayList("", null, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
+				var playlisttrace = bufferController.metricsModel.appendPlayListTrace(playlist,0,0,currentTime,0,0,0,MediaPlayer.vo.metrics.PlayList.Trace.REPRESENTATION_SWITCH_STOP_REASON);
+				expect(playlisttrace.stopreason).toBe("representation_switch");
+            });
+			
+			it("checking play list trace with initial start playlist and End of Content Stop Reason", function () {
+                currentTime = new Date();
+				var playlist=bufferController.metricsModel.addPlayList("", null, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
+				var playlisttrace = bufferController.metricsModel.appendPlayListTrace(playlist,0,0,currentTime,0,0,0,MediaPlayer.vo.metrics.PlayList.Trace.END_OF_CONTENT_STOP_REASON);
+				expect(playlisttrace.stopreason).toBe("end_of_content");
+            });
+			
+			it("checking play list trace with initial start playlist and Rebuffering Stop Reason", function () {
+                currentTime = new Date();
+				var playlist=bufferController.metricsModel.addPlayList("", null, 0, MediaPlayer.vo.metrics.PlayList.INITIAL_PLAY_START_REASON);
+				var playlisttrace = bufferController.metricsModel.appendPlayListTrace(playlist,0,0,currentTime,0,0,0,MediaPlayer.vo.metrics.PlayList.Trace.REBUFFERING_REASON);
+				expect(playlisttrace.stopreason).toBe("rebuffering");
+            });
+			
+	/* 		it("Buffer Initialization to check live Time stamp Offset ", function () {
+				debugger;
+                currentTime = new Date();
+				var fragmentController = system.getObject('fragmentController');
+				var manifestModel = system.getObject('manifestModel');
+				manifestModel.setValue(manifestRes);
+				bufferController.setFragmentController(fragmentController);
+				bufferController.initialize("video",0,manifestRes.Period.AdaptationSet[0],0,0,stream.getVideoModel(),requestScheduler,fragmentController);
+				waitsFor(function(){
+					if(bufferController.getTimestampOffset() != undefined)
+					return true;
+				},"buffer getting initialized,100");
+				runs(function(){
+					debugger;
+					expect(isNaN(bufferController.getTimestampOffset())).not.toBeTruthy();
+				});  
+            });
+			
+			it("Buffer Initialization to check live Offset ", function () {
+                currentTime = new Date();
+				bufferController.initialize("video",0,stream.manifestModel.getValue(),0,0,stream.getVideoModel());
+				waitsFor(function(){
+					if(bufferController.getTimestampOffset() != undefined)
+					return true;
+				},"buffer getting initialized,100");
+				runs(function(){
+					expect(isNaN(bufferController.getLiveOffset())).not.toBeTruthy();
+				});
+            }); */
+			
+			it("Buffer Initialization to Auto Switch Bitrate", function () {
+                debugger;
+                currentTime = new Date();
+				var fragmentController = system.getObject('fragmentController');
+				var manifestModel = system.getObject('manifestModel');
+				manifestModel.setValue(manifestRes);
+				bufferController.setFragmentController(fragmentController);
+				bufferController.initialize("video",0,manifestRes.Period.AdaptationSet[0],0,0,stream.getVideoModel(),requestScheduler,fragmentController);
+				waitsFor(function(){
+					if(bufferController.getAutoSwitchBitrate() != undefined)
+					return true;
+				},"buffer getting initialized,100");
+				runs(function(){
+					expect(bufferController.getAutoSwitchBitrate()).toBe(true);
+				}); 
+			});	
       });
  
      
-      function createObject(system,source) {
-        "use strict";
-        var element,video,stream;
-        element = document.createElement('video');
-        $(element).autoplay = true;
-        video = system.getObject("videoModel");
-        video.setElement($(element)[0]);
-
-        stream = system.getObject("stream");
-        stream.load(source);
-        return stream;
+     function createObject(system) {
+			element = document.createElement('video');
+			$(element).autoplay = true;
+			video = system.getObject("videoModel");
+			video.setElement($(element)[0]);
+			stream = system.getObject("stream");
+			stream.setVideoModel(video);
+			stream.setPeriodIndex(0);
+			periodIndex = stream.getPeriodIndex();
+			stream.load(manifestRes,periodIndex);
+			return stream;
         
       }
    }  

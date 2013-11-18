@@ -13,7 +13,6 @@
 describe("Fragment Controller Suite", function () {
         var fragmentController,
            context,
-           source,
            system,
            flag;
  

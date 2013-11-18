@@ -15,7 +15,6 @@
 describe("Manifest Updater Suite", function () {
         var manifestUpdater,
             context,
-            source,
             system,
             manifestObj,
             flag;
@@ -26,11 +25,11 @@ describe("Manifest Updater Suite", function () {
                 system.mapOutlet("system");
                 context = new Dash.di.DashContext();
                 system.injectInto(context);
-                source = "http://dashdemo.edgesuite.net/envivio/dashpr/clear/Manifest.mpd";
             });
            
              it("setup and all other methods in Manifest Updater Class", function(){
                 var result =false;
+				var source = "http://dash.edgesuite.net/envivio/dashpr/clear/Manifest.mpd";
                 manifestUpdater=system.getObject('manifestUpdater');
                 manifestLoader = system.getObject('manifestLoader');
                 
