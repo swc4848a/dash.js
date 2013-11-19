@@ -12,7 +12,7 @@
 //This class parses the MPDs using DashParser framework.
 if(window.location.href.indexOf("runner.html")>0)
 {
-     describe("Scenario Suite", function () {
+     describe("Scenario Suite", function () {				
                 var bufferController,
                 context,
                 obj,
@@ -27,6 +27,7 @@ if(window.location.href.indexOf("runner.html")>0)
                 system;
          
                 beforeEach(function () {
+					debugger;
 					system = new dijon.System();
                     system.mapValue("system", system);
                     system.mapOutlet("system");
@@ -35,46 +36,33 @@ if(window.location.href.indexOf("runner.html")>0)
 					stream = system.getObject("stream");
 					
 					//added by uma
-					objManifestLoader = system.getObject("manifestLoader");
 					player = new MediaPlayer(context);
 					$("#version-number").text("version " + player.getVersion());
 
 					player.startup();
 
 					debug = player.debug;
-					//debug.init(console);
-
 					player.autoPlay = true;	
-					var input = $("#custom-source"),
-					liveBox = $("#live-checkbox"),
-					debug = player.getDebug(),
-					url,
+
+					var debug = player.getDebug(),
 					isLive = false;
 
-					url = testUrl;
-					//url = "http://127.0.0.1:3000/hostedFiles/Manifest.mpd";
-					isLive = true;
-
-					//player.setIsLive(isLive);
-					player.attachSource(url);
-					debug.log("manifest = " + url + " | isLive = " + isLive);
+					player.attachSource(testUrl);
+					debug.log("manifest = " + testUrl + " | isLive = " + isLive);
 					playing = true;	
 					
 					element = document.createElement('video');
 					$(element).autoplay = true;
 					video = system.getObject("videoModel");
-					video.setElement($(element)[0]);	
+					video.setElement($(element)[0]);
 					
+					streamController = system.getObject('streamController');
+					streamController.setVideoModel(video);
                 });
 				
 
         
-          it("Pause",function(){
-			debugger;
-            video = system.getObject("videoModel");
-            element = document.createElement('video');
-            video.setElement($(element)[0]);  
-            stream = system.getObject("stream");			
+          it("Pause",function(){		
 			player.attachView(video);
 			stream.setVideoModel(video);			
             stream.pause();
@@ -82,382 +70,362 @@ if(window.location.href.indexOf("runner.html")>0)
 	    });
     
         it("Play without initialisation",function(){
-            video = system.getObject("videoModel");
-            element = document.createElement('video');
-            video.setElement($(element)[0]);  
-            stream = system.getObject("stream");
             stream.play();
             expect($(element)[0].currentTime).toBe(0);
         });
-        
 		
         it("seek",function(){
-			debugger;
-			streamController = system.getObject('streamController');
+			debugger;			
 			streamController.load(testUrl);
 			waits(1000);
 			waitsFor(function(){
-				if(stream.manifestModel.getValue() != undefined) return true;
+				if(streamController.getManifestExt() != undefined) return true;
 			},"manifest is not loaded",100);
 			runs(function(){
-				waits(1000);
-				waitsFor(function(){
-				if(stream.manifestModel.getValue() != undefined) return true;
-				},"manifest is not loaded",100);
-				runs(function(){
-					debugger;
-					bufferController = system.getObject("bufferController");			  
-					stream.seek(0);			  
-					expect(bufferController.metricsModel.getMetricsFor("video").PlayList[1].mstart).toBe(0);	
-				});				
-			});
-            /* stream = createObject(system,source); 
-			stream.setVideoModel(video);
-		    waits(1000);
-			waitsFor(function () {
-			if(stream.manifestModel.getValue()!=undefined)
-			 return true;
-			}, "data is null", 100);         
-            runs(function () {
-              bufferController = system.getObject("bufferController");			  
-              stream.seek(0);			  
-			  expect(bufferController.metricsModel.getMetricsFor("video").PlayList[1].mstart).toBe(0);	
-            });   */            
-          });
+				debugger;
+				bufferController = system.getObject("bufferController");
+				streamController.play();
+				expect(bufferController.metricsModel.getMetricsFor("video").PlayList[1].mstart).toBe(0);	
+			});      
+        });
           
-          it("Play",function(){
-            debugger;
-            stream = createObject(system,source); 
-		    waits(1000);
-			waitsFor(function () {
-			if(stream.manifestModel.getValue()!=undefined)
-			 return true;
-			}, "data is null", 100); 
-            runs(function () {
-			  debugger;
-              bufferController = system.getObject("bufferController");
-              stream.play();
-			  bufferController.setVideoModel(video);
-              expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-            });
+        it("Play",function(){
+			debugger;			
+			streamController.load(testUrl);
+			waits(1000);
+			waitsFor(function(){
+				if(streamController.getManifestExt() != undefined) return true;
+			},"manifest is not loaded",100);
+			runs(function(){
+				debugger;
+				bufferController = system.getObject("bufferController");
+				streamController.play();
+				expect(bufferController.metricsModel.getMetricsFor("video").PlayList[1].mstart).toBe(0);	
+			});    
         });
          
         describe("Testcases based Static spec", function () {
             it("checking object data with start and endtime in  manifest", function () {
 					debugger;
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/static/ManifestEndTime.mpd"); 
-                      waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-							debugger;
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+					streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestEndTime.mpd");
+					waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					}); 
            });
            
            it("checking object data with timeShiftBufferDepth in  manifest", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/static/ManifestTimeShift.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestTimeShift.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					}); 
            });
             it("checking object data without min buffer in  manifest", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/static/ManifestNoMinBuffer.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestNoMinBuffer.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					}); 
            });
            
            it("checking object data with suggestedPresentationDelay  in  manifest", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000//hostedFiles/static/ManifestSugPresDelay.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+					debugger;
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestSugPresDelay.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					}); 
            });
            
             it("checking object data without maxSegmentDuration  in  manifest", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/static/ManifestNoMaxSegDuratn.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestNoMaxSegDuratn.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					}); 
            });
            
             it("checking object data with maxSubsegmentDuration  in  manifest", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/static/ManifestMaxSubsegDuration.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestMaxSubsegDuration.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					}); 
            });
            
            it("checking object data with minimumUpdatePeriod   in  manifest", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/static/ManifestWithMinUpdtPerd.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestWithMinUpdtPerd.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data without profile   in  manifest", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/static/ManifestWithoutProfile.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/static/ManifestWithoutProfile.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
        });
        
+	   
        describe("Testcases based Dynamic spec", function () {
           it("checking object data with only type parameter", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/BasicManifest.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/BasicManifest.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data with type parameter as dynamic", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifest.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifest.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data without profiles attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutProfiles.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutProfiles.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            it("checking object data with id attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithId.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithId.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data without availabilityStartTime attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutStart.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutStart.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data without duration attribute attribute (without mediaPresentationDuration and availabilityStartTime)", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutDur.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutDur.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data with  availabilityStartTime and availabilityEndTime attribute  (without mediaPresentationDuration)", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithStart&End.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithStart&End.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data with  availabilityStartTime,availabilityEndTime and mediaPresentationDuration attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithDur.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithDur.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data with minimum update period attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithminUpdPeriod.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithminUpdPeriod.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            it("checking object data with out minimum buffer attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutMinBuffer.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutMinBuffer.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data with  suggestedPresentationDelay attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithSugstedManifest.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithSugstedManifest.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
            it("checking object data with out maxSegmentDuration attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutMaximumDur.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithoutMaximumDur.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            it("checking object data with  maxSubsegmentDuration attribute", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithMaxSubDuration.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);
-                      });
+                    streamController.load("http://127.0.0.1:3000/hostedFiles/dynamic/DynamicManifestWithMaxSubDuration.mpd"); 
+                    waits(1000);
+					waitsFor(function(){
+						if(streamController.getManifestExt() != undefined) return true;
+					},"manifest is not loaded",100);
+					runs(function(){
+						debugger;
+						bufferController = system.getObject("bufferController");
+						streamController.play();
+						expect(bufferController.metricsModel.getMetricsFor("video").PlayList[0].mstart).toBe(0);	
+					});
            });
            
        });
        
+	    /**	
        describe("Other", function () {
             it("checking object data with segmentAlignment false", function () {
-                      stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/others/ManifestWithSegmentAlignment.mpd"); 
-                       waits(1000);
-                      waitsFor(function () {
-                        if(stream.manifestModel.getValue()!=undefined)
-                         return true;
-                        }, "data is null", 100);
-                       runs(function () {
-                            bufferController = system.getObject('bufferController')
-                            stream.play();
-                            waitsFor(function () {
-                                if(stream.videoModel.getElement().error!=null)
-                                 return true;
-                            }, "data is null", 500);
-                            runs(function () {
-                              expect(stream.videoModel.getElement().error.code).toBe(4);
-                            });
-                      });
+				debugger;
+				streamController.load("http://127.0.0.1:3000/hostedFiles/others/ManifestWithSegmentAlignment.mpd"); 
+				waits(1000);
+				waitsFor(function () {
+					if(streamController.getManifestExt() != undefined)
+					 return true;
+					}, "data is null", 100);
+				   runs(function () {
+						debugger;
+						bufferController = system.getObject('bufferController');
+						stream.setVideoModel(video);
+						stream.play();
+						waitsFor(function () {
+							if(stream.videoModel.getElement().error !=null)
+							 return true;
+						}, "data is null", 500);
+						runs(function () {
+							debugger;
+							expect(stream.videoModel.getElement().error.code).toBe(4);
+						});
+				  }); 
            });
            
         });
@@ -546,7 +514,7 @@ if(window.location.href.indexOf("runner.html")>0)
                       });
             });
             
-			/**
+			
             it("checking object data with  mediaStreamStructureId in representation", function () {
                       stream = createObject(system,"http://127.0.0.1:3000/hostedFiles/representation/RepwithMediaStreamStructureId.mpd"); 
                        waits(1000);
@@ -565,16 +533,11 @@ if(window.location.href.indexOf("runner.html")>0)
                               expect(stream.videoModel.getElement().error.code).toBe(4);
                             });
                       });
-            }); */
-        }); 
+            }); 
+        }); */
         
        function createObject(system,otherSrce) {
 			"use strict";
-			// var element,video;
-			// element = document.createElement('video');
-			// $(element).autoplay = true;
-			// video = system.getObject("videoModel");
-			// video.setElement($(element)[0]);
 			stream = system.getObject("stream");
 			stream.setVideoModel(video);
 			stream.setPeriodIndex(0);

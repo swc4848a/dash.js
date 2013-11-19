@@ -157,16 +157,17 @@
 			result = sourceBufferExtension.getBufferLength(buffer, time);
 			expect(result).not.toBeNull();
 		});
- 	}); */
+ 	}); 
  	
  	it("append", function(){
+		debugger;
  		var buffer = null,
  			expectedBuffer = null,
  			bytes = null;
  			
  		sourceBufferExtension.append(buffer, bytes);
- 		expect(buffer).toEqual(expectedBuffer);
- 	}); 
+ 		expect(buffer).toContains(expectedBuffer);
+ 	}); */
 	
 	it("abort", function(){
  		var buffer = null,
