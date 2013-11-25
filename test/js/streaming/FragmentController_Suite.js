@@ -81,4 +81,39 @@ describe("Fragment Controller Suite", function () {
            expect(successResult).toEqual(null);
           });
      });
+	 
+	it("Check if its initialization Request with initialization Request type",function(){
+		debugger; 
+		var request = {};
+		request.action ="download";
+		request.streamType="video";
+		request.type="Initialization Segment";
+		request.url=testUrl;
+
+		var result = fragmentController.isInitializationRequest(request);
+		expect(result).toBeTruthy();
+	});
+	
+	it("Check if its initialization Request without initialization Request type",function(){
+		debugger; 
+		var request = {};
+		request.action ="download";
+		request.streamType="video";
+		request.url=testUrl;
+		
+		var result = fragmentController.isInitializationRequest(request);
+		expect(result).not.toBeTruthy();
+	 });
+	 
+	it("Check if its initialization Request with invalid initialization Request type",function(){
+		debugger; 
+		var request = {};
+		request.action ="download";
+		request.streamType="video";
+		request.type="";
+		request.url=testUrl;
+		
+		var result = fragmentController.isInitializationRequest(request);
+		expect(result).toBe("");
+	 });
 });

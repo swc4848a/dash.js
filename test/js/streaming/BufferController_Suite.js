@@ -22,20 +22,28 @@ if(window.location.href.indexOf("runner.html")>0)
 			source,
             stream,
 			requestScheduler,
+			streamController,
             system;
      
             beforeEach(function () {
+				debugger;
                 system = new dijon.System();
                 system.mapValue("system", system); 
                 system.mapOutlet("system");
                 context = new Dash.di.DashContext();
                 system.injectInto(context);
 				
-				stream = createObject(system);
-				
 				bufferController = system.getObject('bufferController');
 				requestScheduler = system.getObject('requestScheduler');
 				bufferController.setScheduler(requestScheduler);
+				streamController = system.getObject('streamController');
+				
+				element = document.createElement('video');
+				$(element).autoplay = true;
+				video = system.getObject("videoModel");
+				video.setElement($(element)[0]);
+				
+				stream = createObject(system);
             });
             
            
@@ -82,6 +90,72 @@ if(window.location.href.indexOf("runner.html")>0)
             it("creating buffer controller object by setting  ready true and calling do stop", function () {
 				bufferController.stop();
 				expect(bufferController.metricsModel.getMetricsFor(undefined).PlayList.length).toBe(0);
+            });
+			
+			it("Check on buffer completion", function () {
+				debugger;
+				streamController.setVideoModel(video);
+				streamController.load(testUrl);
+				waits(1000);
+				waitsFor(function(){
+					if(streamController.getManifestExt() != undefined) return true;
+				},"manifest is not loaded",100);
+				runs(function(){
+					debugger;
+					streamController.play();
+					expect(bufferController.isBufferingCompleted()).toBe(false);	
+				});    
+            });
+			
+			it("Check buffer State without start", function () {
+				debugger;
+				streamController.setVideoModel(video);
+				streamController.load(testUrl);
+				waits(1000);
+				waitsFor(function(){
+					if(streamController.getManifestExt() != undefined) return true;
+				},"manifest is not loaded",100);
+				runs(function(){
+					debugger;
+					//streamController.play();
+					expect(bufferController.isReady()).toBe(false);	
+				});    
+            });
+			
+			it("Check buffer State after start", function () {
+				debugger;
+				streamController.setVideoModel(video);
+				streamController.load(testUrl);
+				waits(1000);
+				waitsFor(function(){
+					if(streamController.getManifestExt() != undefined) return true;
+				},"manifest is not loaded",100);
+				runs(function(){
+					debugger;
+					bufferController.start();
+					expect(bufferController.isReady()).toBe(false);	
+				});    
+            });
+			
+			it("Check segments count for duration", function () {
+				var indexHandler = system.getObject("indexHandler"), 
+				quality = 0, 
+				requiredDuration = 10, 
+				bufferedDuration = 0;
+				indexHandler.getSegmentCountForDuration(quality,manifestRes.Period_asArray[0].AdaptationSet_asArray[0],requiredDuration,bufferedDuration).then(function(count)
+				{
+					expect(isNaN(count)).not.toBeTruthy();
+				});				
+            });
+			
+			it("Get current time for the fragment", function () {
+				var indexHandler = system.getObject("indexHandler"), 
+				quality = 1;
+
+				indexHandler.getCurrentTime(quality,manifestRes.Period_asArray[0].AdaptationSet_asArray[0]).then(function(time)
+				{
+					expect(isNaN(count)).not.toBeTruthy();
+				});				
             });
             
             //Negative test cases
@@ -181,14 +255,9 @@ if(window.location.href.indexOf("runner.html")>0)
 					expect(bufferController.getAutoSwitchBitrate()).toBe(true);
 				}); 
 			});	
-      });
- 
-     
-     function createObject(system) {
-			element = document.createElement('video');
-			$(element).autoplay = true;
-			video = system.getObject("videoModel");
-			video.setElement($(element)[0]);
+			
+		function createObject(system) {
+			debugger;
 			stream = system.getObject("stream");
 			stream.setVideoModel(video);
 			stream.setPeriodIndex(0);
@@ -196,7 +265,12 @@ if(window.location.href.indexOf("runner.html")>0)
 			stream.load(manifestRes,periodIndex);
 			return stream;
         
-      }
+		} 
+      });
+ 
+     
+      
+
    }  
      
  
